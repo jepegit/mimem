@@ -490,11 +490,45 @@ Two smaller fixes came from the same run: author lists separated by middle dots 
 house style) are now recognised, and repository cover sheets ("Downloaded from …",
 "(article starts on next page)") are marked `BOILERPLATE` rather than being narrated.
 
-**M2 — triage + deterministic verbalizers (1.5 weeks).** Drop rules, numbers, units, citations,
-symbols, code. Still no LLM. *Done when:* a paper renders to a plain narration text that contains no
-citation noise, no raw numerals and no unspeakable characters — and `mimem lint` passes the
-`TTS-01`/`NUM-02`/`CIT-01` rules. **This alone is already worth listening to**, and it is the
-earliest point at which you can test the premise on yourself.
+**M2 — triage + deterministic verbalizers — ✅ done (2026-09-04).** Stage 3 (triage with a drop
+report), the deterministic half of stage 5 (numbers, units, citations, parentheses, symbols), a
+first stage 8 renderer (`audio.md` + `study.md`) and the stage 9 lint suite. Still no LLM anywhere.
+*Done when:* a paper renders to narration text with no citation noise, no raw numerals and no
+unspeakable characters, and `mimem lint` passes `TTS-01`/`NUM-02`/`CIT-01`. ✔
+
+On the three real papers, lint errors went **189 / 126 / 137 → 1 / 10 / 0**; the Springer article
+is clean. `mimem narrate paper.ir.json -o out/` is the command; 145 tests.
+
+*Design notes and deviations:*
+
+- **`pint` was dropped from the plan.** A units library models dimensional algebra, which we do not
+  need, and none of them know how a unit is *said*, which is the only thing we do. `verbalize/units`
+  is a curated lexicon plus a prefix-and-base parser, and it returns `None` for a non-unit — which
+  is how the number verbalizer tells "350 mAh" from "350 cells".
+- **Number-to-words is ours rather than a library's.** What we need is not "render 1234 in English"
+  but a set of *spoken* conventions — digit chunking (`NUM-01b`), unit attachment, scientific
+  notation as a lecturer says it — that any library would have to be overridden to produce.
+- **Ambiguous bare unit symbols are deliberately left alone.** A bare `C` is a C-rate to an
+  electrochemist, coulombs to a physicist and Celsius to everyone else; reading "0.5 C" as
+  "zero point five coulombs" is confidently wrong. `C`, `M`, `T`, `S`, `F`, `H`, `B` stay as
+  letters when bare and resolve normally inside a compound (`µS/cm` is still microsiemens per
+  centimetre). The listener lexicon (`SYM-03`) is where a domain reading gets set.
+- **The lexicon is applied first**, before any other stage can claim a token — otherwise the number
+  verbalizer turns `NMC811` into its own reading before the user's preference is ever consulted.
+- **Two evidence-gated behaviours**, following the line-number pattern from M1: superscript citation
+  stripping and math-placeholder handling both look at the whole document before acting, because a
+  single digit welded to a word is far more likely to be a variable than a citation.
+
+*Known limitations, all visible in the lint output rather than hidden:*
+
+- A **Cell Press reference list** that keeps neither a "References" heading nor a recognisable entry
+  format survives triage, and its DOIs and page numbers are the entire remaining error count on
+  that paper. Better reference detection is the fix.
+- **Model designations** (`Tesla 4680`, `18650`) are read as quantities unless the lexicon says
+  otherwise; the digits welded to letters case (`NMC811`, `R2`, `H2O`) is handled automatically.
+- **Acronym expansion** and **sentence shortening** are the two large warning classes that remain.
+  Both need the concept registry and the rewriting stages, so they arrive with M4/M5 — which is why
+  `SENT-01` and the acronym check are warnings rather than errors.
 
 **M3 — concepts and scoring (1 week).** Extraction, Brysbaert norms, difficulty/importance,
 human-editable registry. *Done when:* for a paper in your own field, the top-20 concepts by

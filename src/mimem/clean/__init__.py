@@ -2,6 +2,7 @@
 
 from mimem.clean.artifacts import strip_page_artifacts
 from mimem.clean.dehyphenate import dehyphenate, dehyphenate_text
+from mimem.clean.extraction import strip_extraction_artifacts
 from mimem.clean.line_numbers import strip_line_numbers
 from mimem.clean.merge import merge_continuations
 from mimem.clean.pipeline import clean
@@ -17,6 +18,7 @@ __all__ = [
     "role_for_heading",
     "sentence_spans",
     "split_sentences",
+    "strip_extraction_artifacts",
     "strip_line_numbers",
     "strip_page_artifacts",
 ]

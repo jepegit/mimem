@@ -9,9 +9,11 @@ a careful reader would have done**, and then hands the result to a text-to-speec
 
 ## Status
 
-Milestones **M0 (skeleton)** and **M1 (ingest + clean)** are done. You can read a paper into the
-canonical IR and see exactly what came out; the stages that turn that into a script (M2–M6) are
-next. See [docs/PLAN-part1.md](docs/PLAN-part1.md) §7 for the roadmap.
+Milestones **M0** (skeleton), **M1** (ingest + clean) and **M2** (triage, deterministic
+verbalizers, narration, lint) are done. A paper now comes out as narration text with no citation
+noise, no raw numerals and nothing unspeakable in it — a straight reading, not yet the memorable
+version. Prequestions, retrieval prompts, concrete anchors and spaced repetition are M3–M6. See
+[docs/PLAN-part1.md](docs/PLAN-part1.md) §7 for the roadmap.
 
 ## Try it
 
@@ -24,10 +26,18 @@ mimem ingest tests/fixtures/docs/synthetic-paper.pdf -o paper.ir.json
 ```
 
 ```bash
+mimem narrate paper.ir.json -o out/
+```
+
+That writes `out/audio.md` (what a TTS engine should say), `out/study.md` (the same material with
+the exact numbers, page anchors and everything the audio track had to leave behind) and
+`out/drop-report.md` (everything triage removed, and why), then lints the result.
+
+```bash
 mimem inspect paper.ir.json --show 3
 ```
 
-`inspect` is the one to look at: it prints the section outline, the block and role counts, the
+`inspect` is the other one to look at: it prints the section outline, the block and role counts, the
 estimated narration time, and every diagnostic the pipeline raised. Reading it is how you find out
 that ingestion quietly ate the methods section.
 

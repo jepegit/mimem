@@ -50,6 +50,11 @@ KEEP_HYPHEN_PREFIXES = frozenset(
 _HYPHEN_BREAK = re.compile(r"(\w+)[-‐‑]\n(\w+)")
 _SOFT_BREAK = re.compile(r"[ \t]*\n[ \t]*")
 _MULTISPACE = re.compile(r"[ \t]{2,}")
+
+#: A soft hyphen is an invisible "you may break the word here" marker. Extraction keeps it,
+#: and often a space with it, so a hyphenated word arrives split in two and is narrated as
+#: two words. It carries no meaning at all, so it and any space it swallowed go.
+_SOFT_HYPHEN = re.compile("­" + r"\s*")
 _LIGATURES = {
     "ﬀ": "ff",
     "ﬁ": "fi",
@@ -63,6 +68,8 @@ _LIGATURES = {
     "“": '"',
     "”": '"',
     "−": "-",
+    "‑": "-",  # non-breaking hyphen: a hyphen to a reader, an unknown to a regex
+    "‐": "-",  # unicode hyphen
 }
 
 #: Blocks whose internal line structure carries meaning and must not be flattened.
@@ -89,6 +96,7 @@ def joins_without_hyphen(left: str, right: str) -> bool:
 
 def dehyphenate_text(text: str) -> tuple[str, int, int]:
     """Return ``(cleaned, joins, kept)`` for one block of text."""
+    text = _SOFT_HYPHEN.sub("", text)
     for src, dst in _LIGATURES.items():
         text = text.replace(src, dst)
 
@@ -138,6 +146,7 @@ def dehyphenate(doc: Document) -> Document:
 
 def _normalise_only(text: str) -> str:
     """Ligature and quote normalisation without touching line structure."""
+    text = _SOFT_HYPHEN.sub("", text)
     for src, dst in _LIGATURES.items():
         text = text.replace(src, dst)
     return text.rstrip()

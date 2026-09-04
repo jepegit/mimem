@@ -1,0 +1,110 @@
+"""Dehyphenation, paragraph merging and sentence splitting.
+
+These three are unglamorous and load-bearing: every one of them corrupts the narration
+silently when it is wrong, which is exactly why they get the densest tests in the suite.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from mimem.clean import dehyphenate_text, sentence_spans
+from mimem.clean.merge import merge_continuations
+from mimem.ir import Block, BlockKind, Document, SourceMeta, block_id
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("electro-\nlyte decomposes", "electrolyte decomposes"),
+        ("inter-\nphase repair", "interphase repair"),
+        ("measure-\nments", "measurements"),
+    ],
+)
+def test_hyphen_at_a_line_break_is_removed(raw: str, expected: str) -> None:
+    assert dehyphenate_text(raw)[0] == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("in-\nsitu measurements", "in-situ measurements"),  # real prefix hyphen
+        ("non-\naqueous solvent", "non-aqueous solvent"),
+        ("Li-\nion cell", "Li-ion cell"),  # short capitalised stem
+        ("X-\nray diffraction", "X-ray diffraction"),
+        ("pH-\ndependent", "pH-dependent"),  # internal capital
+        ("cycle-\nto-cycle", "cycle-to-cycle"),  # continuation is hyphenated
+        ("T-\n2 relaxation", "T-2 relaxation"),  # digit continuation
+    ],
+)
+def test_real_hyphens_survive(raw: str, expected: str) -> None:
+    assert dehyphenate_text(raw)[0] == expected
+
+
+def test_counts_are_reported_for_auditing() -> None:
+    _, joined, kept = dehyphenate_text("electro-\nlyte and in-\nsitu")
+    assert (joined, kept) == (1, 1)
+
+
+def test_line_breaks_become_spaces_and_ligatures_are_expanded() -> None:
+    cleaned, _, _ = dehyphenate_text("the ﬁrst eﬀect\nof the  layer")
+    assert cleaned == "the first effect of the layer"
+
+
+def _paragraphs(*texts: str) -> Document:
+    blocks = [
+        Block(id=block_id("paragraph", 1, i, t), kind=BlockKind.PARAGRAPH, text=t, order=i, page=1)
+        for i, t in enumerate(texts)
+    ]
+    return Document(id="d", source=SourceMeta(format="txt"), blocks=blocks)
+
+
+def test_paragraph_split_by_a_column_break_is_rejoined() -> None:
+    doc = merge_continuations(_paragraphs("which is why the process is", "self-limiting here."))
+    assert len(doc.blocks) == 1
+    assert doc.blocks[0].text == "which is why the process is self-limiting here."
+    assert len(doc.blocks[0].attrs["merged_from"]) == 2
+
+
+def test_complete_paragraphs_are_left_alone() -> None:
+    doc = merge_continuations(_paragraphs("A finished sentence.", "another paragraph follows"))
+    assert len(doc.blocks) == 2
+
+
+def test_a_trailing_abbreviation_does_not_end_a_paragraph() -> None:
+    doc = merge_continuations(_paragraphs("as reported earlier, e.g.", "by the same group."))
+    assert len(doc.blocks) == 1
+
+
+def test_merging_does_not_reach_across_a_heading() -> None:
+    doc = _paragraphs("the process is", "self-limiting.")
+    doc.blocks.insert(
+        1,
+        Block(id="h", kind=BlockKind.HEADING, text="2. Methods", order=1, level=1, page=1),
+    )
+    doc.renumber()
+    assert len(merge_continuations(doc).blocks) == 3
+
+
+@pytest.mark.parametrize(
+    ("text", "count"),
+    [
+        ("Capacity fell by 0.0837 % per cycle. The fit was good.", 2),
+        ("See Fig. 4 for the trend. It is monotonic.", 2),
+        ("Reported by Smith et al. in 2019 and confirmed later.", 1),
+        ("Values were low, e.g. 0.5 mA, in every cell.", 1),
+        ("One sentence only", 1),
+    ],
+)
+def test_sentence_splitting_survives_scientific_prose(text: str, count: int) -> None:
+    assert len(sentence_spans(text)) == count
+
+
+def test_sentence_spans_are_offsets_into_the_original_text() -> None:
+    text = "First one. Second one."
+    spans = sentence_spans(text)
+    assert [text[a:b] for a, b in spans] == ["First one.", "Second one."]
+
+
+def test_empty_text_yields_no_sentences() -> None:
+    assert sentence_spans("   \n ") == []

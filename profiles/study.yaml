@@ -1,0 +1,42 @@
+# The default profile. See docs/DESIGN-RULES.md for what each knob enforces.
+name: study
+description: >
+  Everyday serious listening. One retrieval prompt per segment, two to three spaced
+  exposures of each key concept, exact numbers.
+
+wpm: 155
+duration_multiplier: 1.4
+
+segments:
+  target_min: 45
+  target_max: 90
+  hard_max: 120
+
+pauses:
+  retrieval_min: 3.0
+  retrieval_max: 6.0
+  imagery_min: 2.0
+  imagery_max: 4.0
+  segment_boundary: 1.2
+  section_boundary: 2.0
+
+prompts_per_segment: 1
+min_prompts_per_section: 1
+prequestions_per_document: 3
+prequestions_per_section: 1
+
+spacing:
+  min_gap_minutes: 3.0
+  interval_ratio: 2.5
+  repetitions_min: 2
+  repetitions_max: 3
+
+review_block_multiplier: 1.0
+max_preload_terms: 7
+max_new_terms_per_segment: 3
+emphasis_markers_per_section: 1
+
+# NUM-01: exact by default. The listener is a researcher; the numbers are the point.
+numeric_fidelity: exact
+speak_statistics_verdict: true
+citations: suppress

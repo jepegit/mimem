@@ -1,0 +1,11 @@
+# Test fixtures must survive a round trip through git unchanged -- line-ending translation
+# would corrupt them and the PDF tests would fail in confusing ways.
+*.pdf binary
+*.epub binary
+*.png binary
+*.jpg binary
+*.mp3 binary
+*.wav binary
+
+# Everything else is text; normalise in the repo, check out native.
+* text=auto

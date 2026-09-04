@@ -55,6 +55,11 @@ MIN_LINE_FRACTION = 0.10
 MIN_RANGE_COVERAGE = 0.50
 
 #: Blocks whose internal numbers may legitimately look like a sequence.
+#:
+#: Note the ordering: this stage runs first, before :mod:`mimem.clean.sections` retypes
+#: reference entries, so in practice only TABLE and CODE are ever matched here. REFERENCE is
+#: listed because the guard should still hold if this is ever called on a document that has
+#: already been through section assignment.
 _SKIP_KINDS = frozenset({BlockKind.TABLE, BlockKind.CODE, BlockKind.REFERENCE})
 
 

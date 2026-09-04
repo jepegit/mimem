@@ -2,6 +2,8 @@
 
 Order matters and is not negotiable:
 
+0. **line numbers** -- must run first, while the line structure still exists. A manuscript
+   line number sitting between ``recov-`` and ``ery`` defeats dehyphenation completely.
 1. **dehyphenate** -- must run before anything reads words, or terms are split in half.
 2. **page artifacts** -- needs page geometry, which later steps do not preserve.
 3. **merge** -- needs artifacts already removed, or a running head glues two paragraphs
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 from mimem.clean.artifacts import strip_page_artifacts
 from mimem.clean.dehyphenate import dehyphenate
+from mimem.clean.line_numbers import strip_line_numbers
 from mimem.clean.merge import merge_continuations
 from mimem.clean.sections import assign_sections
 from mimem.clean.sentences import split_sentences
@@ -27,6 +30,7 @@ def clean(doc: Document, *, drop_empty: bool = True) -> Document:
     if _STAGE in doc.stages:
         return doc
 
+    strip_line_numbers(doc)
     dehyphenate(doc)
     strip_page_artifacts(doc)
     if drop_empty:

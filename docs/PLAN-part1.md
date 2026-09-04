@@ -459,6 +459,37 @@ sentence splitting. *Done when:* a two-column paper produces a clean, correctly 
   excludes volatile metadata like ingestion time. It is what "ingestion is deterministic" means as
   a test, and it is the cache key stage 6 will need.
 
+*Validated against three real papers* (a Springer article, a Cell Press article, and a preprint
+served from a university repository). All three ingested without intervention; each exposed a
+distinct defect, and all four are now regression-tested:
+
+1. **Manuscript line numbers destroy words.** The preprint numbers every line, and PDF extraction
+   puts those numbers into the text stream on their own line. A hyphenated word breaking around
+   one gives `recov-` / `19` / `ery`, and dehyphenation — seeing a digit as the continuation —
+   keeps the hyphen and produces `recov-19 ery`. 241 words in that paper were corrupted this way.
+   `mimem.clean.line_numbers` now strips them, and must run before dehyphenation because it needs
+   the line structure. After the fix, hyphen joins went from 4 to 36 and spurious "kept" hyphens
+   from 241 to 18.
+2. **Detecting line numbers is easy to get wrong.** The first detector accepted any long
+   monotonic run of lone integers, and fired on the *published* Springer article, where
+   affiliation superscripts (1–9) and journal folio numbers (7478–7499) interleave into
+   something that looks monotonic. Two more tests were needed: density (line numbering marks
+   roughly every line) and range coverage (it is contiguous — 31 values spread over a range of
+   7499 is not line numbering).
+3. **Front matter is not in the first few blocks.** The window was 15 blocks and gave up if it
+   found no structural heading. A Springer front page runs to more than that before the
+   Introduction, which begins on page 2 — so no front matter was labelled at all and the title
+   was lost outright. The window is now the first page, front-matter labelling is
+   positive-evidence-only, and anything it cannot identify stays `UNKNOWN` for triage.
+4. **"Summary" is usually a conclusion.** Matching it as an abstract turned "6 Summary and
+   future perspectives" into an abstract heading and relabelled every block after it. It now maps
+   to `CONCLUSION` in the body and to `ABSTRACT` only in the front matter, where it is
+   unambiguous.
+
+Two smaller fixes came from the same run: author lists separated by middle dots (Springer's
+house style) are now recognised, and repository cover sheets ("Downloaded from …",
+"(article starts on next page)") are marked `BOILERPLATE` rather than being narrated.
+
 **M2 — triage + deterministic verbalizers (1.5 weeks).** Drop rules, numbers, units, citations,
 symbols, code. Still no LLM. *Done when:* a paper renders to a plain narration text that contains no
 citation noise, no raw numerals and no unspeakable characters — and `mimem lint` passes the

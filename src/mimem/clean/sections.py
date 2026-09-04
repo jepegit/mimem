@@ -20,7 +20,11 @@ from mimem.ir import Block, BlockKind, BlockRole, DiagnosticLevel, Document
 
 #: Ordered: the first pattern that matches a heading wins.
 _ROLE_PATTERNS: tuple[tuple[BlockRole, re.Pattern[str]], ...] = (
-    (BlockRole.ABSTRACT, re.compile(r"^\s*(abstract|summary)\b", re.I)),
+    # "Summary" is deliberately not here. Some journals title the abstract "Summary", but far
+    # more papers use it for the closing section ("6 Summary and future perspectives"), and
+    # matching it as an abstract mid-document mislabels everything that follows. In the front
+    # matter, where it is unambiguous, `_assign_front_matter` accepts it.
+    (BlockRole.ABSTRACT, re.compile(r"^\s*abstract\b", re.I)),
     (BlockRole.KEYWORDS, re.compile(r"^\s*key\s*words?\b", re.I)),
     (BlockRole.REFERENCES, re.compile(r"^\s*(references|bibliography|literature cited)\b", re.I)),
     (BlockRole.ACKNOWLEDGEMENT, re.compile(r"^\s*acknowledge?ment", re.I)),
@@ -51,7 +55,27 @@ _ROLE_PATTERNS: tuple[tuple[BlockRole, re.Pattern[str]], ...] = (
         re.compile(r"^\s*(results?)(\s+and\s+discussion)?\b", re.I),
     ),
     (BlockRole.DISCUSSION, re.compile(r"^\s*discussion\b", re.I)),
-    (BlockRole.CONCLUSION, re.compile(r"^\s*(conclusions?|concluding remarks|outlook)\b", re.I)),
+    (
+        BlockRole.CONCLUSION,
+        re.compile(
+            r"^\s*(conclusions?|concluding remarks|outlook"
+            r"|summary and (outlook|future|perspectives?|conclusions?)|summary)\b",
+            re.I,
+        ),
+    ),
+)
+
+#: Publisher and repository furniture that shows up in the front matter of a real PDF. A
+#: repository cover sheet ("Downloaded from ... (article starts on next page)") is several
+#: hundred words of pure noise wrapped around the paper you actually wanted.
+_BOILERPLATE_HINT = re.compile(
+    r"\bdownloaded from\b|\barticle starts on next page\b"
+    r"|\bcitation for the (original|published)\b|\bwhen citing this work\b"
+    r"|\boffers the possibility of retrieving\b|\bthis is the (accepted|author)"
+    r"|\ball rights reserved\b|\bopen access\b.{0,60}\bcreative commons\b"
+    r"|^\s*received:.{0,80}\baccepted:|\bpublished online:\s*\d"
+    r"|\bterms of use\b|\bsupplementary (material|information) (is )?available\b",
+    re.IGNORECASE | re.DOTALL,
 )
 
 _LEADING_NUMBER = re.compile(r"^\s*(?:\d+(?:\.\d+)*|[IVXLC]+)[.)]?\s+")
@@ -154,24 +178,43 @@ def _inherit(role: BlockRole) -> BlockRole:
 
 
 #: How many blocks at the head of a document may be front matter before we give up looking.
-MAX_FRONT_MATTER_BLOCKS = 15
+#: Real papers need much more room than it looks: a Springer front page runs journal line,
+#: article-type banner, logo, title, a two-line author list, submission dates, abstract,
+#: keywords, corresponding-author line and six affiliations before the Introduction begins.
+MAX_FRONT_MATTER_BLOCKS = 40
+
+
+def _is_structural_heading(block: Block) -> bool:
+    """A heading that names a section of the paper, rather than a heading inside one."""
+    if block.kind is not BlockKind.HEADING:
+        return False
+    if role_for_heading(block.text) is not None:
+        return True
+    return bool(re.match(r"^\s*\d+(?:\.\d+)*[.)]?\s+\S", block.text))
 
 
 def _front_matter_end(doc: Document) -> int:
     """Index of the first block that belongs to the body proper.
 
-    A "structural" heading -- one we recognise by name (Introduction, Methods, References) or by
-    numbering ("2. Experimental") -- marks the end of the front matter. If none is found in the
-    first few blocks, there is no front matter to speak of.
+    The front matter ends at the first structural heading -- one we recognise by name
+    (Introduction, Methods, References) or by numbering ("2. Experimental").
+
+    When no such heading appears before the end of the first page, the whole first page is
+    treated as front matter instead of giving up. That case is common and it used to lose the
+    title outright: on a Springer paper the Introduction starts on page two, so scanning a short
+    window from the top found nothing structural and no front matter was labelled at all.
+    Labelling is positive-evidence-only, so widening the window costs little -- a block the
+    front-matter pass cannot identify stays UNKNOWN and is left for triage.
     """
+    first_page = next((b.page for b in doc.blocks if b.page is not None), None)
+    window = 0
     for i, block in enumerate(doc.blocks[:MAX_FRONT_MATTER_BLOCKS]):
-        if block.kind is not BlockKind.HEADING:
-            continue
-        if role_for_heading(block.text) is not None:
+        if first_page is not None and block.page is not None and block.page != first_page:
+            break
+        if _is_structural_heading(block):
             return i
-        if re.match(r"^\s*\d+(?:\.\d+)*[.)]?\s+\S", block.text):
-            return i
-    return 0
+        window = i + 1
+    return window
 
 
 def _assign_front_matter(doc: Document, front: list[Block]) -> None:
@@ -207,9 +250,12 @@ def _assign_front_matter(doc: Document, front: list[Block]) -> None:
         if block.order < title.order:
             continue  # running heads and journal furniture above the title: leave for triage
 
-        if re.match(r"^\s*key\s*words?\b", text, re.I):
+        if _BOILERPLATE_HINT.search(text):
+            block.role, in_abstract = BlockRole.BOILERPLATE, False
+        elif re.match(r"^\s*key\s*words?\b", text, re.I):
             block.role, in_abstract = BlockRole.KEYWORDS, False
-        elif re.match(r"^\s*abstract\b", text, re.I):
+        elif re.match(r"^\s*(abstract|summary)\b", text, re.I):
+            # In the front matter, "Summary" is unambiguously the abstract.
             block.role, in_abstract = BlockRole.ABSTRACT, True
         elif in_abstract:
             block.role = BlockRole.ABSTRACT
@@ -223,18 +269,25 @@ def _assign_front_matter(doc: Document, front: list[Block]) -> None:
                 block.kind = BlockKind.PARAGRAPH
                 block.level = None
             if not doc.source.authors:
-                doc.source.authors = [a.strip() for a in text.split(",") if a.strip()]
+                doc.source.authors = [a.strip() for a in _AUTHOR_SEPARATOR.split(text) if a.strip()]
         else:
-            block.role = BlockRole.BODY
+            # Positive evidence only. An unidentified front-matter block stays UNKNOWN and is
+            # left for triage rather than being promoted into the narration by default.
+            continue
         block.attrs["front_matter_guess"] = True
+
+
+#: Author lists are separated by commas, semicolons, or the middle dot Springer favours
+#: ("Anupam Yadav1 · Mustafa Abdullah2 · V. Vivek3").
+_AUTHOR_SEPARATOR = re.compile(r"[,;·•]")
 
 
 def _looks_like_author_list(text: str) -> bool:
     if len(text) > 400 or text.endswith("."):
         return False
-    commas = text.count(",")
+    separators = len(_AUTHOR_SEPARATOR.findall(text))
     capitals = sum(1 for w in text.split() if w[:1].isupper())
-    return commas >= 1 and capitals >= 2 and len(text.split()) <= 60
+    return separators >= 1 and capitals >= 2 and len(text.split()) <= 60
 
 
 def _rescue_unheaded_references(doc: Document) -> None:

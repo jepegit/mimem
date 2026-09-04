@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# mimem
+.mimem-cache/
+listener.yaml
+*.ir.json
+out/
+
+# Real papers used for testing: copyrighted, not ours to redistribute.
+example-data/

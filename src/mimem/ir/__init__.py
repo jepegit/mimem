@@ -1,0 +1,39 @@
+"""The mimem intermediate representation."""
+
+from mimem.ir.ids import asset_id, block_id, document_id, file_sha256, text_sha256
+from mimem.ir.models import (
+    NON_CONTENT_ROLES,
+    SCHEMA_VERSION,
+    Asset,
+    AssetKind,
+    BBox,
+    Block,
+    BlockKind,
+    BlockRole,
+    Diagnostic,
+    DiagnosticLevel,
+    Document,
+    SourceMeta,
+    Span,
+)
+
+__all__ = [
+    "NON_CONTENT_ROLES",
+    "SCHEMA_VERSION",
+    "Asset",
+    "AssetKind",
+    "BBox",
+    "Block",
+    "BlockKind",
+    "BlockRole",
+    "Diagnostic",
+    "DiagnosticLevel",
+    "Document",
+    "SourceMeta",
+    "Span",
+    "asset_id",
+    "block_id",
+    "document_id",
+    "file_sha256",
+    "text_sha256",
+]

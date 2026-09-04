@@ -1,0 +1,42 @@
+# For deciding whether a paper deserves a proper reading.
+name: skim
+description: >
+  Half-length pass. Structure, claims and headline numbers; one prompt per section, one
+  exposure per concept, no analogies.
+
+wpm: 165
+duration_multiplier: 0.5
+
+segments:
+  target_min: 40
+  target_max: 75
+  hard_max: 100
+
+pauses:
+  retrieval_min: 2.5
+  retrieval_max: 4.0
+  imagery_min: 1.5
+  imagery_max: 2.5
+  segment_boundary: 1.0
+  section_boundary: 1.5
+
+prompts_per_segment: 0
+min_prompts_per_section: 1
+prequestions_per_document: 2
+prequestions_per_section: 0
+
+spacing:
+  min_gap_minutes: 2.0
+  interval_ratio: 2.5
+  repetitions_min: 1
+  repetitions_max: 1
+
+review_block_multiplier: 0.5
+max_preload_terms: 5
+max_new_terms_per_segment: 4
+emphasis_markers_per_section: 1
+
+# Still exact -- a skim that garbles the headline number is worse than no skim.
+numeric_fidelity: exact
+speak_statistics_verdict: true
+citations: suppress

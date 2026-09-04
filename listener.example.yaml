@@ -1,0 +1,40 @@
+# Copy to listener.yaml (git-ignored) and edit. Point mimem at it with --listener or
+# MIMEM_LISTENER_FILE.
+#
+# This is the single biggest quality lever for a domain specialist: it is what stops the
+# system explaining "electrolyte" to you for the hundredth time.
+
+name: jepe
+default_expertise: familiar
+
+# Domain -> novice | familiar | expert. Shifts difficulty scores (rule DIF-04), which in turn
+# decides who gets a gloss, an anchor, and extra repetitions.
+expertise:
+  electrochemistry: expert
+  battery-materials: expert
+  materials-science: familiar
+  machine-learning: familiar
+  statistics: familiar
+  biology: novice
+
+# Terms you never need explained, whatever the difficulty model thinks.
+known_terms:
+  - electrolyte
+  - anode
+  - cathode
+  - coulombic efficiency
+  - cyclic voltammetry
+  - state of charge
+
+# Spoken forms for things a TTS engine will mangle (rule SYM-03). Left side is matched
+# case-insensitively against the source text.
+lexicon:
+  SEI: "S E I"
+  NMC811: "N M C eight one one"
+  LiPF6: "lithium hexafluorophosphate"
+  dQ/dV: "d Q by d V"
+  Li-ion: "lithium ion"
+  cellpy: "cell pie"
+
+# Optional: overrides the profile's narration rate.
+# wpm: 160

@@ -15,6 +15,8 @@ from mimem.ir.models import (
     Document,
     SourceMeta,
     Span,
+    TriageAction,
+    TriageDecision,
 )
 
 __all__ = [
@@ -31,6 +33,8 @@ __all__ = [
     "Document",
     "SourceMeta",
     "Span",
+    "TriageAction",
+    "TriageDecision",
     "asset_id",
     "block_id",
     "document_id",

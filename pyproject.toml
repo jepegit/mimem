@@ -67,9 +67,18 @@ ignore = ["E501"]  # line length is handled by the formatter
 # These modules exist precisely to handle typographic characters -- soft hyphens, en dashes,
 # ligatures, minus signs, Greek letters. RUF001 flags exactly the characters they must match.
 "src/mimem/clean/dehyphenate.py" = ["RUF001"]
+"src/mimem/clean/extraction.py" = ["RUF001"]
 "src/mimem/clean/merge.py" = ["RUF001"]
+"src/mimem/clean/sections.py" = ["RUF001"]
 "src/mimem/clean/sentences.py" = ["RUF001"]
 "src/mimem/ingest/pdf.py" = ["RUF001"]
+# The verbalizers are the whole reason those characters need handling at all: Greek letters,
+# minus signs, multiplication signs, en dashes and typographic quotes are their subject matter.
+"src/mimem/verbalize/__init__.py" = ["RUF002"]
+"src/mimem/verbalize/citations.py" = ["RUF001"]
+"src/mimem/verbalize/numbers.py" = ["RUF001", "RUF002"]
+"src/mimem/verbalize/symbols.py" = ["RUF001", "RUF002"]
+"src/mimem/verbalize/units.py" = ["RUF001", "RUF002"]
 
 [tool.mypy]
 python_version = "3.11"

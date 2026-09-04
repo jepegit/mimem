@@ -35,6 +35,10 @@ lexicon:
   dQ/dV: "d Q by d V"
   Li-ion: "lithium ion"
   cellpy: "cell pie"
+  # Model designations are read digit by digit by default ("four six eight zero").
+  # Override them here when the field says them differently.
+  "4680": "forty six eighty"
+  "18650": "eighteen six fifty"
 
 # Optional: overrides the profile's narration rate.
 # wpm: 160

@@ -394,7 +394,13 @@ seconds. *(planner)*
 ## 9. TTS handoff (`TTS-*`)
 
 **TTS-01** `audio.md` contains **only speakable characters**: letters, spaces, and a restricted
-punctuation set (`. , ? ! : ; —`). Everything else is a lint error. *(lint)*
+punctuation set (`. , ? ! : ; — ' -`). Everything else is a lint error. *(lint)*
+
+The apostrophe and the hyphen were added to the set during M2. The apostrophe because the
+generated voice uses contractions (`VOI-01`); the hyphen because removing it from "Li-ion"
+changes a term rather than a symbol. Digits and brackets are unspeakable too, but they are
+reported by `NUM-02` and `SENT-03` so that each defect is named once, by the rule that says
+how to fix it.
 
 **TTS-02** Prosody is controlled through **sentence length, punctuation and explicit break markers
 only**. No reliance on `<prosody>`, `<emphasis>` or `<say-as>`, which mainstream neural engines

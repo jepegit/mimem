@@ -21,6 +21,11 @@ from mimem.config import Settings, load_listener, load_profile
 from mimem.ingest import IngestError, available_extensions
 from mimem.ingest import load as run_ingest
 from mimem.ir import Block, BlockKind, BlockRole, DiagnosticLevel, Document
+from mimem.lint import LintReport, Severity
+from mimem.lint import lint as run_lint
+from mimem.render import narrate as run_narrate
+from mimem.triage import drop_report
+from mimem.triage import triage as run_triage
 
 app = typer.Typer(
     name="mimem",
@@ -155,15 +160,106 @@ def profiles() -> None:
 
 
 @app.command()
+def triage(
+    ir: Annotated[Path, typer.Argument(help="IR JSON")],
+    out: Annotated[Path | None, typer.Option("--out", "-o")] = None,
+    report: Annotated[
+        Path | None, typer.Option("--report", help="write the drop report here")
+    ] = None,
+) -> None:
+    """Stage 3: decide what reaches the narration, and record why (rules COH-*)."""
+    doc = run_triage(_read_document(ir))
+    _write_document(doc, out or ir)
+    if report:
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(drop_report(doc), encoding="utf-8")
+        console.print(f"[green]wrote[/] {report}")
+    _print_diagnostics(doc)
+
+
+@app.command()
+def narrate(
+    ir: Annotated[Path, typer.Argument(help="IR JSON")],
+    out_dir: Annotated[Path, typer.Option("--out", "-o", help="output directory")] = Path("out"),
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+    check: Annotated[bool, typer.Option("--lint/--no-lint", help="lint the result")] = True,
+) -> None:
+    """Stages 3, 5 and 8: retained content, verbalized, as narration text.
+
+    This is a straight reading, not the memorable version -- prequestions, retrieval beats,
+    anchors and spacing arrive with M4. What it proves is that nothing unspeakable survives.
+    """
+    settings = Settings()
+    try:
+        profile = load_profile(profile_name, settings)
+    except FileNotFoundError as exc:
+        _fail(str(exc))
+        return
+    listener = load_listener(listener_file, settings)
+
+    doc = run_triage(_read_document(ir))
+    narration = run_narrate(doc, profile, listener)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "audio.md").write_text(narration.audio, encoding="utf-8")
+    (out_dir / "study.md").write_text(narration.study, encoding="utf-8")
+    (out_dir / "drop-report.md").write_text(drop_report(doc), encoding="utf-8")
+
+    minutes = narration.estimated_seconds(profile) / 60
+    console.print(
+        f"[green]wrote[/] {out_dir}/audio.md  "
+        f"({narration.spoken_words} words, about {minutes:.1f} min at {profile.wpm:.0f} wpm)"
+    )
+    if narration.pending:
+        pending = ", ".join(f"{n} {kind}" for kind, n in sorted(narration.pending.items()))
+        console.print(f"  [yellow]awaiting M5 verbalizers:[/] {pending}", style="dim")
+    if check:
+        _report_lint(run_lint(narration.audio))
+
+
+@app.command()
+def lint(
+    target: Annotated[Path, typer.Argument(help="audio.md, or a directory containing it")],
+) -> None:
+    """Stage 9: check narration text against the design rules."""
+    path = target / "audio.md" if target.is_dir() else target
+    if not path.exists():
+        _fail(f"no such file: {path}")
+        return
+    report = run_lint(path.read_text(encoding="utf-8"))
+    _report_lint(report)
+    if not report.ok:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def build(
     source: Annotated[Path, typer.Argument()],
     profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
 ) -> None:
-    """Full pipeline. Not available yet -- stages 3-9 land in M2-M6."""
+    """Full pipeline. Not available yet -- the learning-design stages land in M4-M6."""
     _fail(
-        "`build` needs stages 3-9, which are not implemented yet (see docs/PLAN-part1.md). "
-        "Use `mimem ingest` and `mimem inspect` today."
+        "`build` needs stages 4, 6 and 7 (concepts, elaboration, planning), which are not "
+        "implemented yet -- see docs/PLAN-part1.md. Today: `mimem ingest` then `mimem narrate`."
     )
+
+
+def _report_lint(report: LintReport, examples: int = 3) -> None:
+    """Print a lint report: counts first, then a few examples of each rule."""
+    if report.ok and not report.warnings:
+        console.print(f"[green]lint clean[/] ({len(report.checked_rules)} rules)")
+        return
+    style = "bold red" if not report.ok else "yellow"
+    console.print(f"[{style}]lint:[/] {report.summary()}")
+    seen: dict[str, int] = {}
+    for v in report.violations:
+        seen[v.rule] = seen.get(v.rule, 0) + 1
+        if seen[v.rule] > examples:
+            continue
+        colour = "red" if v.severity is Severity.ERROR else "yellow"
+        console.print(f"  [{colour}]{v.rule}[/] line {v.line}: {v.message}", style="dim")
+        console.print(f"      …{v.excerpt}…", style="dim")
 
 
 # -- printing helpers --------------------------------------------------------------------

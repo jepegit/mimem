@@ -135,6 +135,28 @@ class Asset(Base):
     attrs: dict[str, Any] = Field(default_factory=dict)
 
 
+class TriageAction(StrEnum):
+    """What stage 3 decided to do with a block (rules ``COH-*``)."""
+
+    KEEP = "keep"
+    COMPRESS = "compress"  # retained, but shortened before narration
+    TRANSFORM = "transform"  # not prose: a figure, table or equation needs verbalizing
+    DROP = "drop"
+
+
+class TriageDecision(Base):
+    """A triage decision, with its reason.
+
+    Rule COH-05: drops are recorded, never silent. The reason is written for a human reading
+    the drop report, and ``rule`` names the design rule that justified it.
+    """
+
+    action: TriageAction
+    rule: str  # e.g. "COH-01"
+    reason: str
+    confidence: float = 1.0  # 1.0 for rule-based decisions, lower for heuristics
+
+
 class Block(Base):
     """One structural unit of the source document."""
 
@@ -150,6 +172,7 @@ class Block(Base):
     parent_id: str | None = None
     section_id: str | None = None  # ID of the heading block that governs this block
     sentences: list[tuple[int, int]] = Field(default_factory=list)  # char offsets into `text`
+    triage: TriageDecision | None = None  # filled by stage 3
     attrs: dict[str, Any] = Field(default_factory=dict)
 
     @property

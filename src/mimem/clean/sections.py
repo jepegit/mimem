@@ -116,6 +116,19 @@ def assign_sections(doc: Document) -> Document:
     front_end = _front_matter_end(doc)
     _assign_front_matter(doc, doc.blocks[:front_end])
 
+    # A repository cover sheet is a whole front page of boilerplate wrapped around the paper,
+    # whose *real* front matter then begins on page two. Labelling stopped at the end of page
+    # one and left the author list to be narrated as prose, superscripts and all. If page one
+    # turned out to be nothing but boilerplate, look at the next page too.
+    for _ in range(2):
+        if not _is_cover_page(doc.blocks[:front_end]):
+            break
+        extended = _front_matter_end(doc, after=front_end)
+        if extended <= front_end:
+            break
+        _assign_front_matter(doc, doc.blocks[front_end:extended])
+        front_end = extended
+
     stack: list[Block] = []  # heading blocks, outermost first
     current_role = BlockRole.UNKNOWN
     seen_heading = False
@@ -193,7 +206,7 @@ def _is_structural_heading(block: Block) -> bool:
     return bool(re.match(r"^\s*\d+(?:\.\d+)*[.)]?\s+\S", block.text))
 
 
-def _front_matter_end(doc: Document) -> int:
+def _front_matter_end(doc: Document, *, after: int = 0) -> int:
     """Index of the first block that belongs to the body proper.
 
     The front matter ends at the first structural heading -- one we recognise by name
@@ -205,16 +218,29 @@ def _front_matter_end(doc: Document) -> int:
     window from the top found nothing structural and no front matter was labelled at all.
     Labelling is positive-evidence-only, so widening the window costs little -- a block the
     front-matter pass cannot identify stays UNKNOWN and is left for triage.
+
+    ``after`` restarts the scan further into the document, which is how a repository cover
+    page is skipped so the paper's own front matter can be labelled.
     """
-    first_page = next((b.page for b in doc.blocks if b.page is not None), None)
-    window = 0
-    for i, block in enumerate(doc.blocks[:MAX_FRONT_MATTER_BLOCKS]):
-        if first_page is not None and block.page is not None and block.page != first_page:
+    blocks = doc.blocks[after : after + MAX_FRONT_MATTER_BLOCKS]
+    page = next((b.page for b in blocks if b.page is not None), None)
+    window = after
+    for i, block in enumerate(blocks, start=after):
+        if page is not None and block.page is not None and block.page != page:
             break
         if _is_structural_heading(block):
             return i
         window = i + 1
     return window
+
+
+def _is_cover_page(blocks: list[Block]) -> bool:
+    """Was this whole page publisher furniture rather than the paper's own front matter?"""
+    labelled = [b for b in blocks if b.role is not BlockRole.UNKNOWN and b.text.strip()]
+    if not labelled:
+        return False
+    informative = [b for b in labelled if b.role not in {BlockRole.BOILERPLATE, BlockRole.TITLE}]
+    return not informative
 
 
 def _assign_front_matter(doc: Document, front: list[Block]) -> None:

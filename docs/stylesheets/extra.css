@@ -1,0 +1,122 @@
+/* mimem's own colours.
+ *
+ * The palette is copper on slate: warm, a little burnt, and borrowed from the anchor the
+ * worked example keeps coming back to -- a cast-iron pan that seasons itself. Documentation
+ * about memory should be memorable to look at, and the stock blue is not.
+ *
+ * Headings are set in Fraunces, a serif with opinions, against Source Sans for body text. The
+ * contrast is the point: the headings sound like someone talking, the body reads like a manual.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap");
+
+:root {
+  --mimem-copper: #b4541f;
+  --mimem-copper-light: #d97b3c;
+  --mimem-ink: #1c1a17;
+  --mimem-parchment: #faf7f2;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--mimem-ink);
+  --md-primary-fg-color--light: #3a352e;
+  --md-primary-fg-color--dark: #100f0d;
+  --md-accent-fg-color: var(--mimem-copper);
+  --md-default-bg-color: var(--mimem-parchment);
+  --md-typeset-a-color: var(--mimem-copper);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 232;
+  --md-primary-fg-color: #16151a;
+  --md-accent-fg-color: var(--mimem-copper-light);
+  --md-typeset-a-color: var(--mimem-copper-light);
+}
+
+/* Headings with a voice. */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-header__topic .md-ellipsis {
+  font-family: "Fraunces", var(--md-text-font-family), Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+
+/* The home page's opening claim, set like a pull quote rather than a paragraph. */
+.mimem-lede {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1.45;
+  font-weight: 500;
+  max-width: 34em;
+  margin: 0.6rem 0 1.4rem;
+}
+
+.mimem-lede em {
+  color: var(--md-accent-fg-color);
+  font-style: normal;
+}
+
+/* Card grids: the four ways into this documentation. */
+.mimem-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.mimem-cards > div {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 1rem 1.1rem;
+  transition: border-color 120ms, transform 120ms;
+}
+
+.mimem-cards > div:hover {
+  border-color: var(--md-accent-fg-color);
+  transform: translateY(-2px);
+}
+
+.mimem-cards h3 {
+  margin-top: 0 !important;
+  font-size: 1rem;
+}
+
+.mimem-cards p:last-child {
+  margin-bottom: 0;
+}
+
+/* Before-and-after: what the engine says, and what mimem says instead. */
+.mimem-before,
+.mimem-after {
+  border-left: 3px solid;
+  padding: 0.2rem 0 0.2rem 0.9rem;
+  margin: 1rem 0;
+}
+
+.mimem-before {
+  border-color: var(--md-default-fg-color--lighter);
+  color: var(--md-default-fg-color--light);
+}
+
+.mimem-after {
+  border-color: var(--mimem-copper);
+}
+
+/* Rule IDs, wherever they appear in prose. */
+.md-typeset code {
+  font-size: 0.85em;
+}
+
+/* A quieter table: a lot of this documentation is tables of rules. */
+.md-typeset table:not([class]) th {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  background: var(--md-default-fg-color--lightest);
+}

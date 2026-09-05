@@ -30,6 +30,7 @@ dependencies = [
 [project.optional-dependencies]
 epub = ["ebooklib>=0.18", "beautifulsoup4>=4.12", "lxml>=5.2"]
 llm = ["anthropic>=0.40"]
+docs = ["zensical>=0.0.59"]
 dev = [
     "pytest>=8.2",
     "pytest-cov>=5.0",

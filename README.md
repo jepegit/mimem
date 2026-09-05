@@ -2,6 +2,8 @@
 
 Convert your library into audio that is designed for remembering.
 
+**[Read the documentation →](https://jepegit.github.io/mimem/)**
+
 Listening to a book or a paper usually leaves nothing behind. That is not a personal failing — it is
 what happens when you remove the reader's ability to slow down, re-read, jump back and build a
 picture, and put nothing in its place. **mimem rewrites a document so that the text itself does what
@@ -74,6 +76,12 @@ it, which concept it is about, and what it cost in seconds.
 
 ## Documentation
 
+The full documentation is at **[jepegit.github.io/mimem](https://jepegit.github.io/mimem/)** —
+[for listeners](https://jepegit.github.io/mimem/listening/),
+[the science behind it](https://jepegit.github.io/mimem/science/), and
+[for anyone working on it](https://jepegit.github.io/mimem/building/). It is built from the
+`docs/` directory in this repository, so everything below is also readable here:
+
 | Document | What it is |
 |---|---|
 | [docs/knowledge-base/](docs/knowledge-base/README.md) | What the research says about learning from text and from audio, with confidence tags and sources |
@@ -84,6 +92,12 @@ it, which concept it is about, and what it cost in seconds.
 
 Code that implements a design rule names it (`# SEG-01`), so the literature and the implementation
 stay connected.
+
+To work on the documentation itself:
+
+```bash
+uv run zensical serve
+```
 
 ## The two parts
 

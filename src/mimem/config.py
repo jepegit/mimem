@@ -79,6 +79,32 @@ class SpacingPolicy(BaseModel):
     repetitions_max: int = 3
 
 
+class ElaborationBudget(BaseModel):
+    """How much of the document the elaboration layer is allowed to work on (rule DIF-02).
+
+    A cap on *concepts*, not on calls, because the cost that matters is the listener's time:
+    thirty glossed terms in a forty-minute programme is a glossary, not a paper.
+
+    Anchors are rule IMG-01 made numeric: abstract *and* important, because an abstract aside
+    does not earn a picture and a concrete central idea already has one.
+
+    Both numbers are read against the document's own distribution, because that is what the
+    scores are. ``anchor_min_abstractness`` sits at the median: a concept must be in the more
+    abstract half of *this paper*. Importance enters as **rank** rather than as a threshold --
+    the candidates are already ordered by ``difficulty x importance`` -- because on a real paper
+    only the paper's own subject scores above a half, and the paper's own subject is the least
+    abstract thing in it. Absolute cuts on relative scores select nothing; both of these were
+    absolute cuts once, and both selected nothing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_concepts: int = 12
+    max_analogies: int = 3  # rule ANA-02: at most one per concept, and the first thing cut
+    max_anchors: int = 4
+    anchor_min_abstractness: float = 0.50
+
+
 class Profile(BaseModel):
     """A named set of budgets. Loaded from ``profiles/<name>.yaml``."""
 
@@ -90,6 +116,15 @@ class Profile(BaseModel):
     # pacing
     wpm: float = 155.0
     duration_multiplier: float = 1.4
+    #: The floor under the duration budget, in seconds (rule DUR-02).
+    #:
+    #: The budget exists to stop a three-hour book becoming a nine-hour programme. It has no
+    #: work to do below ten minutes, and real harm: a programme has fixed costs -- orientation,
+    #: prequestions, term pre-load, review block -- that do not shrink with the document, so a
+    #: purely proportional budget spends a short document's entire allowance on scaffolding and
+    #: then cuts the analogy, the emphasis and the callbacks. On a five-minute programme that is
+    #: an optimisation nobody asked for, of a quantity nobody is short of.
+    duration_floor_seconds: float = 600.0
     segments: SegmentBudget = Field(default_factory=SegmentBudget)
     pauses: PauseBudget = Field(default_factory=PauseBudget)
 
@@ -99,6 +134,7 @@ class Profile(BaseModel):
     prequestions_per_document: int = 3
     prequestions_per_section: int = 1
     spacing: SpacingPolicy = Field(default_factory=SpacingPolicy)
+    elaboration: ElaborationBudget = Field(default_factory=ElaborationBudget)
     review_block_multiplier: float = 1.0
     max_preload_terms: int = 7
     max_new_terms_per_segment: int = 3

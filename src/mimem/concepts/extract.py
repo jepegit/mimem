@@ -400,8 +400,22 @@ def _author_words(doc: Document) -> frozenset[str]:
     knows who wrote it, so ask it rather than guessing from orthography.
     """
     words: set[str] = set()
-    for author in doc.source.authors:
-        parts = [w.lower().strip(".,") for w in _TOKEN.findall(author) if len(w) > 2]
+    names = list(doc.source.authors)
+    if not names:
+        # Not every PDF carries its authors in its metadata, and this one did not: a corresponding
+        # author was ranked as a concept and would have been sent for a gloss. Stage 2 already
+        # labelled the author block, so ask it before giving up.
+        names = [b.text for b in doc.blocks if b.role is BlockRole.AUTHORS and b.text.strip()]
+    for author in names:
+        # Affiliation markers are superscripts on the page and plain digits in the text layer,
+        # so the surname arrives as "Kandahari9" and matches nothing. Stripping them is the
+        # difference between filtering a corresponding author out and sending their name for a
+        # gloss.
+        parts = [
+            stripped
+            for w in _TOKEN.findall(author)
+            if len(stripped := w.lower().strip(".,").rstrip("0123456789")) > 2
+        ]
         # Surnames only. A given name like "Mark" or "Bree" is far too likely to collide with
         # ordinary vocabulary to reject a phrase on its own.
         if parts:

@@ -9,16 +9,16 @@ a careful reader would have done**, and then hands the result to a text-to-speec
 
 ## Status
 
-Milestones **M0** (skeleton), **M1** (ingest + clean), **M2** (triage, deterministic verbalizers,
-narration, lint), **M3** (concepts and scoring) and **M4** (planner and renderer) are done. A paper
-now comes out as a *programme*: an orientation, questions to hold on to, a term pre-load, the
-paper's own sentences cut into segments, a question at the end of each one, key ideas brought back
-at increasing intervals, and a review that mixes the sections together. No model is called — every
-sentence is either the source's, carrying the span it came from, or a named template.
+Milestones **M0**–**M5** are done. A paper comes out as a *programme*: an orientation, questions
+to hold on to, a term pre-load, the paper's own sentences cut into segments, a question at the end
+of each one, key ideas brought back at increasing intervals, and a review that mixes the sections
+together. With `--llm` it also gets glosses, concrete anchors and analogies — and everything a
+model writes is checked against the sentences it was written from before it is spoken.
 
-Still to come: the elaboration layer that writes glosses, concrete anchors and analogies (**M5**),
-the full lint suite and evaluation harness (**M6**), and the hand-off to a speech engine (**M7**).
-See [docs/PLAN-part1.md](docs/PLAN-part1.md) §7.
+Still to come: the full lint suite and evaluation harness (**M6**), and the hand-off to a speech
+engine (**M7**). See [docs/PLAN-part1.md](docs/PLAN-part1.md) §7. One caveat worth knowing: the
+live API adapter has never been run — there was no key in the environment it was written in — so
+validate it on one short paper before pointing it at a book.
 
 ## Try it
 
@@ -40,6 +40,18 @@ That runs the whole pipeline and writes:
 | `manifest.json` | Scores, the exposure log, the spacing hand-off, and one addressable chunk per beat |
 
 It exits non-zero if the result breaks a design rule, so a bad script cannot be emitted quietly.
+
+Nothing is billed unless you ask. The default runs the deterministic pipeline and reports what it
+skipped; `--dry-run` prints the calls and an estimate without making any; `--budget` stops rather
+than surprising you:
+
+```bash
+mimem elaborate paper.ir.json --dry-run
+```
+
+```bash
+mimem build paper.pdf --llm --budget 3.00 --out out/paper
+```
 
 Each stage is also a file-to-file transform, so you can stop anywhere, edit the JSON by hand, and
 resume — `mimem ingest`, `triage`, `concepts`, `plan`, `render`, `lint`:

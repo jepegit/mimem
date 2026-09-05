@@ -20,6 +20,8 @@ from mimem.clean import clean as run_clean
 from mimem.concepts import build as build_registry
 from mimem.concepts import norms
 from mimem.config import Listener, Profile, Settings, load_listener, load_profile
+from mimem.elaborate import elaborate as run_elaborate
+from mimem.elaborate import plan_requests
 from mimem.ingest import IngestError, available_extensions
 from mimem.ingest import load as run_ingest
 from mimem.ir import (
@@ -34,6 +36,8 @@ from mimem.ir import (
 from mimem.lint import LintReport, Severity
 from mimem.lint import lint as run_lint
 from mimem.lint import lint_script as run_lint_script
+from mimem.llm import Cached, Client, FixtureClient, NullClient
+from mimem.llm.cost import BudgetExceededError
 from mimem.plan import plan as run_plan
 from mimem.render import narrate as run_narrate
 from mimem.render import render as run_render
@@ -326,6 +330,61 @@ def lint(
 
 
 @app.command()
+def elaborate(
+    ir: Annotated[Path, typer.Argument(help="triaged IR JSON")],
+    registry_file: Annotated[
+        Path | None, typer.Option("--registry", help="registry JSON; built if absent")
+    ] = None,
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="print the planned calls and stop")
+    ] = False,
+    fixtures: Annotated[
+        Path | None, typer.Option("--fixtures", help="replay recorded answers from here")
+    ] = None,
+    live: Annotated[
+        bool, typer.Option("--llm/--local", help="call a model, or run deterministic-only")
+    ] = False,
+    model: Annotated[str | None, typer.Option("--model")] = None,
+    budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
+    no_cache: Annotated[bool, typer.Option("--no-cache")] = False,
+) -> None:
+    """Stage 6: glosses, concrete anchors, why-explanations and analogies.
+
+    Nothing here is billed unless you ask for it: the default is ``--local``, which runs every
+    task's degradation path and reports what it skipped. ``--dry-run`` prints the calls and an
+    estimate without making any. ``--budget`` stops the run rather than surprising you.
+
+    Everything a model writes is checked against the sentences it was written from before it is
+    stored -- a number the source does not state is rejected, not warned about.
+    """
+    settings = Settings()
+    profile, listener = _profile_and_listener(profile_name, listener_file, settings)
+    doc = run_triage(_read_document(ir))
+    target = registry_file or ir.with_name(ir.stem.replace(".ir", "") + ".registry.json")
+    registry = _load_or_build_registry(doc, registry_file, ir, listener)
+
+    if dry_run:
+        planned = plan_requests(doc, registry, profile, listener)
+        console.print(planned.report())
+        console.print(planned.report(batch=True), style="dim")
+        return
+
+    client = _make_client(fixtures, live, model, settings, no_cache)
+    try:
+        report = run_elaborate(doc, registry, profile, listener, client, budget=budget)
+    except BudgetExceededError as exc:
+        _fail(str(exc))
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(registry.to_json(), encoding="utf-8")
+    console.print(f"[green]wrote[/] {target}")
+    _print_elaboration(report)
+
+
+@app.command()
 def plan(
     ir: Annotated[Path, typer.Argument(help="triaged IR JSON")],
     out: Annotated[Path | None, typer.Option("--out", "-o", help="script JSON")] = None,
@@ -432,12 +491,19 @@ def build(
     out_dir: Annotated[Path, typer.Option("--out", "-o", help="output directory")] = Path("out"),
     profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
     listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+    fixtures: Annotated[
+        Path | None, typer.Option("--fixtures", help="replay recorded elaborations from here")
+    ] = None,
+    live: Annotated[
+        bool, typer.Option("--llm/--local", help="call a model for stage 6, or skip it")
+    ] = False,
+    budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
 ) -> None:
     """The whole pipeline: source document to a listenable, checkable programme.
 
-    Stage 6 -- the LLM elaboration layer -- is not wired in yet, so there are no anchors,
-    analogies or figure descriptions. Everything else runs: what you get is the paper, said in
-    a way you can follow, with the questions and the spacing that make it stick.
+    Stage 6 is off by default. With ``--local`` you get the paper said in a way you can follow,
+    with the questions and the spacing that make it stick; with ``--llm`` you also get the
+    glosses, the concrete anchors and the analogies, and a bill.
     """
     settings = Settings()
     profile, listener = _profile_and_listener(profile_name, listener_file, settings)
@@ -453,6 +519,15 @@ def build(
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
     registry = build_registry(doc, listener)
+    if fixtures is not None or live:
+        client = _make_client(fixtures, live, None, settings, no_cache=False)
+        try:
+            _print_elaboration(
+                run_elaborate(doc, registry, profile, listener, client, budget=budget)
+            )
+        except BudgetExceededError as exc:
+            _fail(str(exc))
+            return
     (out_dir / "registry.json").write_text(registry.to_json(), encoding="utf-8")
 
     script = run_plan(doc, registry, profile, listener)
@@ -528,6 +603,46 @@ def _load_or_build_registry(
             )
     console.print(f"[dim]no registry at {candidate}; building one[/]")
     return build_registry(doc, listener)
+
+
+def _make_client(
+    fixtures: Path | None,
+    live: bool,
+    model: str | None,
+    settings: Settings,
+    no_cache: bool,
+) -> Client:
+    """Pick a transport. The default refuses, which is the point.
+
+    A build that starts billing because a flag was forgotten is a bad build, so ``--llm`` is
+    explicit and everything else is free.
+    """
+    client: Client
+    if fixtures is not None:
+        client = FixtureClient(fixtures)
+    elif live:
+        from mimem.llm import DEFAULT_MODEL, AnthropicClient
+
+        client = AnthropicClient(model=model or DEFAULT_MODEL)
+    else:
+        client = NullClient()
+    if no_cache or isinstance(client, NullClient):
+        return client
+    return Cached(inner=client, directory=settings.cache_dir / "llm")
+
+
+def _print_elaboration(report: object) -> None:
+    from mimem.elaborate import ElaborationReport
+
+    if not isinstance(report, ElaborationReport):  # pragma: no cover - defensive
+        return
+    console.print(f"  {report.summary()}", style="dim")
+    for degradation in report.degraded[:5]:
+        console.print(f"  [yellow]degraded[/] {degradation}", style="dim")
+    if len(report.degraded) > 5:
+        console.print(f"  ... and {len(report.degraded) - 5} more", style="dim")
+    if report.ledger.calls:
+        console.print(f"  {report.ledger.summary()}", style="dim")
 
 
 def _print_script_summary(script: Script, profile: Profile) -> None:

@@ -658,10 +658,81 @@ On the three real papers, all lint-clean:
 - **`SENT-01` and the acronym warnings remain.** Long sentences are split only at semicolons;
   real splitting is a rewriting task and belongs to M5.
 
-**M5 — LLM elaboration layer (2 weeks).** Task framework, caching, batch, structured outputs,
-document-citation provenance, groundedness verification, figure descriptions. *Done when:* the
-worked example in [`docs/examples/sample-output.md`](examples/sample-output.md) can be produced
-end-to-end from its source paragraph, and `GRD-03` catches a deliberately corrupted number in a test.
+**M5 — LLM elaboration layer — done, with one caveat (2026-09-05).** Task framework, schemas,
+prompts, content-addressed cache, cost control, degradation paths, the grounding gate, and the
+planner beats that speak what stage 6 writes. *Done when:* the worked example in
+[`docs/examples/sample-output.md`](examples/sample-output.md) can be produced end-to-end from its
+source paragraph, and `GRD-03` catches a deliberately corrupted number in a test. Both hold —
+`tests/unit/test_elaborate.py` builds the target rendering from the paragraph in section A and
+rejects a gloss claiming a figure the paper never states. 355 tests.
+
+**The caveat, stated plainly: the live API adapter has never been run.** There is no
+`ANTHROPIC_API_KEY` in the environment this was built in, so `AnthropicClient` has made no
+requests. It *is* type-checked against the installed SDK, which is worth something — that check
+found a real bug, a `.input` read on a union of block types where only one of them has one — but
+a type check is not a run. Everything around it is exercised — schemas, cache, cost, budget cap,
+grounding, degradation, the beats — through `ScriptedClient` and `FixtureClient`. Validate the
+adapter on one short paper before pointing it
+at a book; the `--dry-run` flag will tell you what that costs first.
+
+```bash
+mimem elaborate paper.ir.json --dry-run     # 29 calls, an estimated $1.67
+mimem build paper.pdf --llm --budget 3.00   # and a hard cap
+```
+
+*Design notes and deviations:*
+
+- **Four transports, and the default refuses.** `NullClient` is `--local`: every task degrades
+  along its documented path and the manifest says what was skipped. `FixtureClient` replays a
+  recorded run; `ScriptedClient` answers by task name, which is what the tests use, because a
+  digest-keyed fixture would break every time a prompt is reworded. `RecordingClient` writes
+  fixtures from a live run. A build that starts billing because a flag was forgotten is a bad
+  build, so `--llm` is explicit.
+- **The prompt, the schema and the linter each enforce the same rules.** `ANA-01` is asked for in
+  the prompt, required by `AnalogyOut`, and checked on the beat. Three mechanisms that fail
+  differently is what lets an elaboration layer be added to a working pipeline without weakening
+  it.
+- **Anchors are checked differently from glosses.** A gloss and a why-explanation are claims
+  *about the document*, so they carry their spans and every number in them must appear in those
+  spans. An anchor is *supposed* to contain things the paper never said — that is what an image
+  for an abstract idea is — so it gets the numeric check only, and rule `VOI-02` makes the
+  planner introduce it as ours.
+- **A missing check never looks like a passed check.** `GRD-02` entailment needs a model; with
+  none configured the verdict is `None`, not `True`.
+- **Figure descriptions are specified but not wired in.** `FigureOut` and the `figure` task
+  exist, with the six-part `FIG-01` template as schema fields and a required confidence. What is
+  missing is the vision plumbing — cropping the figure region and attaching the image — which
+  needs a live client to be worth building. Until then figures narrate as the honest placeholder
+  M2 gave them.
+
+*What building it changed elsewhere:*
+
+1. **Two absolute thresholds on relative scores selected nothing.** Anchors required abstractness
+   ≥ 0.55 *and* importance ≥ 0.5, but both are normalised within the document: on a real paper
+   only the paper's own subject clears the importance bar, and the paper's own subject is the
+   least abstract thing in it. Zero anchors, ever. Abstractness now sits at the median and
+   importance enters as rank.
+2. **The duration budget needed a floor.** It is proportional to content, but a programme's
+   orientation, prequestions, pre-load and review block cost the same whether the paper is a
+   paragraph or a chapter — so on a short document the budget was spent entirely on scaffolding
+   and then cut the analogy, the emphasis and the callbacks. Below ten minutes the budget now
+   stops cutting: it exists to stop a three-hour book becoming a nine-hour programme, and it has
+   no work to do there.
+3. **`enforce` now records its own drops.** It mutated the script and left recording to the
+   caller; one caller forgot, and the failure mode is a beat that vanishes without appearing in
+   the "what I left out" appendix — precisely what `COH-05` exists to prevent.
+4. **An author's surname arrived as "Kandahari9".** Affiliation markers are superscripts on the
+   page and plain digits in the text layer, so the author filter had the name and did not
+   recognise it — and a corresponding author was about to be sent for a gloss.
+
+*Known limitations:*
+
+- The live adapter is unexercised (above).
+- No batch API yet. The plan calls for it for the bulk tasks at half price; the cost model
+  already prices it (`--dry-run` reports both), but the submission path is not written.
+- `compress` and `verify` are specified and callable, but the planner does not yet route
+  `COH-02` blocks through the first or run the second as a build gate. The deterministic half of
+  `GRD-03` runs on every elaboration today.
 
 **M6 — lint suite complete + eval harness (1 week).** All rules from §10 of the design rules, plus
 the metrics in §8 below. *Done when:* `mimem lint` is wired into CI and a regression in any generator

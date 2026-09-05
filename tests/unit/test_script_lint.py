@@ -1,5 +1,9 @@
 """One passing and one failing example for every structural lint rule.
 
+The plan under test has been through stage 6 -- it has a gloss, an anchor, an analogy and a
+why-explanation on its top concept -- because three of these rules have nothing to look at
+otherwise, and a rule that passes because the artefact is empty has not been tested.
+
 The plan asks for a pass/fail fixture pair per rule, and this is that, built as mutations rather
 than as JSON files on disk. A mutation says what the rule is *about* -- "delete the answer beat",
 "give two concepts the same anchor" -- in a way a hand-written fixture does not, and it cannot
@@ -122,22 +126,44 @@ def _repeat_verbatim(script: Script) -> None:
 
 
 def _crowd_a_callback(script: Script) -> None:
-    """SPC-01: a scheduled exposure inside the minimum gap, in a later section."""
-    owner, introduction = next(
-        (i, beat)
-        for i, section in enumerate(script.sections[:-1])
-        for beat in section.beats()
-        if beat.type is BeatType.EXPOSITION and beat.concept_ids
+    """SPC-01: a scheduled exposure inside the minimum gap.
+
+    Built rather than found. The violation needs a gap that is *past* the episode window and
+    *inside* the minimum gap, in two different sections -- three conditions the fixture's own
+    timeline satisfies only by accident, and would stop satisfying the moment the fixture grew a
+    paragraph. So: introduce a concept at the end of one section, wait ninety seconds, and call
+    it back at the start of the next.
+    """
+    first, second = script.sections[0], script.sections[1]
+    concept_id = "c_crowded"
+    first.segments[-1].beats.extend(
+        [
+            Beat(
+                id=beat_id(BeatType.EXPOSITION, "crowded introduction", "mutant"),
+                type=BeatType.EXPOSITION,
+                text="Here is an idea that will come back too soon.",
+                concept_ids=[concept_id],
+                spans=[Span(block_id="b_mutant")],
+                est_seconds=1.0,
+            ),
+            Beat(
+                id=beat_id(BeatType.EXPOSITION, "ninety seconds of filler", "mutant"),
+                type=BeatType.EXPOSITION,
+                text="Ninety seconds pass.",
+                spans=[Span(block_id="b_mutant")],
+                est_seconds=90.0,
+            ),
+        ]
     )
-    script.sections[owner + 1].segments[0].beats.insert(
+    second.segments[0].beats.insert(
         0,
         Beat(
-            id=beat_id(BeatType.CALLBACK, "crowded", "mutant"),
+            id=beat_id(BeatType.CALLBACK, "crowded callback", "mutant"),
             type=BeatType.CALLBACK,
             text="Back to that for a moment. It matters here too.",
-            concept_ids=introduction.concept_ids[:1],
+            concept_ids=[concept_id],
             spans=[Span(block_id="b_mutant")],
-            est_seconds=3.0,
+            est_seconds=1.0,
         ),
     )
 
@@ -167,6 +193,29 @@ def _analogy_without_a_limit(script: Script) -> None:
     )
 
 
+def _unmarked_anchor(script: Script) -> None:
+    """VOI-02: an anchor said without saying it is ours."""
+    beat = _first(script, BeatType.ANCHOR)
+    beat.text = "A cast-iron pan seasons itself the first time it is heated."
+
+
+def _anchor_without_a_pause(script: Script) -> None:
+    """PAU-02: an image the listener is given no time to form."""
+    _first(script, BeatType.ANCHOR).pause_after = 0.0
+
+
+def _invented_number(script: Script) -> None:
+    """GRD-03: the worst failure this system can produce, in its cheapest form."""
+    beat = _first(script, BeatType.GLOSS)
+    beat.text = beat.text.rstrip(".") + ", and it costs 41.85 percent of capacity."
+
+
+def _first(script: Script, kind: BeatType) -> Beat:
+    beat = next((b for b in script.beats() if b.type is kind), None)
+    assert beat is not None, f"the fixture has no {kind.value} beat"
+    return beat
+
+
 def _split_a_sentence(script: Script) -> None:
     """TTS-04: a chunk that ends mid-sentence."""
     beat = next(b for b in script.beats() if b.type is BeatType.EXPOSITION)
@@ -186,6 +235,9 @@ CASES: list[tuple[str, Mutator]] = [
     ("GRD-01", _ungrounded_exposition),
     ("IMG-02", _share_an_anchor),
     ("ANA-01", _analogy_without_a_limit),
+    ("VOI-02", _unmarked_anchor),
+    ("PAU-02", _anchor_without_a_pause),
+    ("GRD-03", _invented_number),
     ("TTS-04", _split_a_sentence),
 ]
 IDS = [case[0] for case in CASES]
@@ -193,16 +245,16 @@ IDS = [case[0] for case in CASES]
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)
 def test_the_clean_plan_passes(
-    rule_id: str, mutate: Mutator, interphase_script: Script, study_profile: Profile
+    rule_id: str, mutate: Mutator, elaborated_script: Script, study_profile: Profile
 ) -> None:
-    assert _errors(_rule(rule_id, study_profile), interphase_script) == []
+    assert _errors(_rule(rule_id, study_profile), elaborated_script) == []
 
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)
 def test_the_broken_plan_fails(
-    rule_id: str, mutate: Mutator, interphase_script: Script, study_profile: Profile
+    rule_id: str, mutate: Mutator, elaborated_script: Script, study_profile: Profile
 ) -> None:
-    broken = interphase_script.model_copy(deep=True)
+    broken = elaborated_script.model_copy(deep=True)
     mutate(broken)
     assert _errors(_rule(rule_id, study_profile), broken), f"{rule_id} did not notice"
 
@@ -212,6 +264,6 @@ def test_every_rule_has_a_fixture_pair(study_profile: Profile) -> None:
     assert {r.id for r in script_rules(study_profile)} == set(IDS)
 
 
-def test_a_rule_only_reports_its_own_id(interphase_script: Script, study_profile: Profile) -> None:
+def test_a_rule_only_reports_its_own_id(elaborated_script: Script, study_profile: Profile) -> None:
     for rule in script_rules(study_profile):
-        assert all(v.rule == rule.id for v in rule.check(interphase_script))
+        assert all(v.rule == rule.id for v in rule.check(elaborated_script))

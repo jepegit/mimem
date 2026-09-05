@@ -349,6 +349,92 @@ def preload_beats(factory: BeatFactory, terms: list[tuple[Concept, str]]) -> lis
     return beats
 
 
+#: Rule VOI-02: the phrases that hand ownership of a sentence to whoever wrote it. Kept as data
+#: because the linter checks for them -- a generated beat that forgets to say it is generated is
+#: a beat the listener will file under "things the paper said".
+OWNERSHIP_MARKERS: tuple[str, ...] = (
+    "here's a way to picture it",
+    "my analogy, not theirs",
+    "that's my way of putting it",
+)
+
+
+def gloss_beat(
+    factory: BeatFactory, concept: Concept, text: str, spans: list[Span], source: str
+) -> Beat:
+    """The full introduction of a term, at the point it first matters (rules PRE-01, DIF-02).
+
+    A gloss is *about* the document, so it carries the spans it was written from and rule
+    ``GRD-01`` requires them. It is not scaffolding in the way an anchor is: it makes claims
+    that can be wrong, and ``GRD-03`` checks the numbers in it against ``source``.
+    """
+    return factory.make(
+        BeatType.GLOSS,
+        f"{concept.canonical}, in short. {text}",
+        spans=spans,
+        concept_ids=[concept.id],
+        rules=["PRE-01", "DIF-02", "GRD-01"],
+        written_text=source,
+        generated=False,
+        generator="llm:gloss",
+    )
+
+
+def anchor_beat(factory: BeatFactory, concept: Concept, text: str, source: str) -> Beat:
+    """A concrete image for an abstract idea (rules IMG-01, PAU-02, VOI-02).
+
+    Followed by a pause, because an image the listener is given no time to form is a sentence
+    about a pan rather than a picture of one.
+    """
+    return factory.make(
+        BeatType.ANCHOR,
+        f"Here's a way to picture it. {text}",
+        concept_ids=[concept.id],
+        rules=["IMG-01", "IMG-02", "PAU-02", "VOI-02"],
+        pause_after=factory.profile.pauses.imagery_min,
+        written_text=source,
+        generated=True,
+        generator="llm:anchor",
+    )
+
+
+def why_beat(
+    factory: BeatFactory, concept: Concept, text: str, spans: list[Span], source: str
+) -> Beat:
+    """Why a claim holds (rule ELB-01). A claim about the document, so it carries its spans."""
+    return factory.make(
+        BeatType.ELABORATION,
+        f"Why that follows. {text}",
+        spans=spans,
+        concept_ids=[concept.id],
+        rules=["ELB-01", "GRD-01"],
+        written_text=source,
+        generated=False,
+        generator="llm:why",
+    )
+
+
+def analogy_beat(
+    factory: BeatFactory, concept: Concept, text: str, limit: str, source: str
+) -> Beat:
+    """An analogy with its limit, in the same breath (rules ANA-01, VOI-02).
+
+    The limit is not a disclaimer appended for form's sake -- it is the half of the beat that
+    stops the listener remembering the analogy instead of the concept, which is why the two are
+    one beat rather than two.
+    """
+    return factory.make(
+        BeatType.ANALOGY,
+        f"My analogy, not theirs: {text} Where it breaks down: {limit}",
+        concept_ids=[concept.id],
+        rules=["ANA-01", "VOI-02", "PAU-02"],
+        pause_after=factory.profile.pauses.imagery_min,
+        written_text=source,
+        generated=True,
+        generator="llm:analogy",
+    )
+
+
 def position_beat(factory: BeatFactory, title: str, index: int, total: int) -> Beat:
     """Rule ORI-01: a one-clause position statement, so nobody is lost.
 

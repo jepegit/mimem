@@ -38,12 +38,17 @@ class ConceptKind(StrEnum):
 class Anchor(Base):
     """A concrete, imageable scene that instantiates an abstract concept (rules IMG-01..03).
 
-    Generated in M5. Stable and unique by construction: the same concept gets the same anchor
-    every time it recurs, which is what turns the anchor into a retrieval cue.
+    Stable and unique by construction: the same concept gets the same anchor every time it
+    recurs, which is what turns the anchor into a retrieval cue.
+
+    An anchor carries no span and needs none. It is ours, not the paper's, and rule ``GRD-01``
+    says so explicitly -- which is also why rule ``VOI-02`` requires it to be introduced as
+    ours when it is spoken.
     """
 
     text: str
     generated_by: str | None = None
+    verified: bool | None = None  # rule GRD-02, filled by the verification pass
 
 
 class Analogy(Base):
@@ -56,12 +61,27 @@ class Analogy(Base):
     text: str
     limit: str
     generated_by: str | None = None
+    verified: bool | None = None
 
     @model_validator(mode="after")
     def _limit_is_present(self) -> Self:
         if not self.limit.strip():
             raise ValueError("an analogy must state its limit (rule ANA-01)")
         return self
+
+
+class Elaboration(Base):
+    """A "why is this true" sentence for a claim the paper makes (rule ELB-01).
+
+    Unlike an anchor or an analogy this one *is* a claim about the document, so it carries the
+    spans it was written from and rule ``GRD-02`` verifies it against them. An elaboration that
+    cannot point at its evidence is an invention, and rule ``ELB-03`` forbids it.
+    """
+
+    text: str
+    spans: list[Span] = Field(default_factory=list)
+    generated_by: str | None = None
+    verified: bool | None = None
 
 
 class Exposure(Base):
@@ -89,6 +109,7 @@ class Concept(Base):
     long_def: str | None = None
     anchor: Anchor | None = None
     analogy: Analogy | None = None
+    why: Elaboration | None = None  # rule ELB-01
 
     difficulty: float = 0.0  # 0..1 (rule DIF-01)
     importance: float = 0.0  # 0..1 (rule DIF-01)

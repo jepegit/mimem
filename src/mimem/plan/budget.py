@@ -54,16 +54,24 @@ PROTECTED: frozenset[BeatType] = frozenset(
 )
 
 
-def budget_seconds(straight_read_seconds: float, multiplier: float) -> float:
-    """The duration budget for a document (rule DUR-02)."""
-    return straight_read_seconds * multiplier
+def budget_seconds(
+    straight_read_seconds: float, multiplier: float, floor_seconds: float = 0.0
+) -> float:
+    """The duration budget for a document (rule DUR-02).
+
+    ``floor_seconds`` is what stops a short document being stripped of the structure that makes
+    it a programme: the opening block and the review block cost the same whether the paper is a
+    paragraph or a chapter. See :class:`~mimem.config.Profile`.
+    """
+    return max(straight_read_seconds * multiplier, floor_seconds)
 
 
 def enforce(script: Script, budget: float) -> list[DropRecord]:
     """Drop beats in the ``DUR-02`` order until the plan fits, and record every removal.
 
-    Mutates ``script``. Returns the drop records, which the caller also stores on the script so
-    that ``manifest.json`` can answer "what did it decide not to say".
+    Mutates ``script``, and records every removal on it: rule COH-05 says a drop is never
+    silent, and leaving that to the caller means one caller eventually forgets. The records are
+    returned as well, for a caller that wants to report them immediately.
     """
     dropped: list[DropRecord] = []
     if script.est_seconds <= budget:
@@ -75,6 +83,7 @@ def enforce(script: Script, budget: float) -> list[DropRecord]:
         for section in _sections_by_length(script):
             for segment in section.segments:
                 if script.est_seconds <= budget:
+                    script.dropped.extend(dropped)
                     return dropped
                 keep = []
                 for beat in segment.beats:
@@ -95,6 +104,7 @@ def enforce(script: Script, budget: float) -> list[DropRecord]:
         if script.est_seconds <= budget:
             break
 
+    script.dropped.extend(dropped)
     if script.est_seconds > budget:
         over = (script.est_seconds - budget) / 60.0
         script.notes.append(

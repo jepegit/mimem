@@ -40,7 +40,12 @@ jobs:
       - name: Build
         run: uv run zensical build --clean
 
+      # `enablement` turns Pages on the first time this runs, so that publishing the site is a
+      # reviewable line in the repository rather than a settings change nobody can see. It is a
+      # no-op on every subsequent run.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

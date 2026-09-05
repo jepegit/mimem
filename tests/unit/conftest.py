@@ -145,3 +145,43 @@ def study_profile() -> Profile:
 def interphase_script(interphase_doc: Document, study_profile: Profile) -> Script:
     registry = build_registry(interphase_doc, Listener())
     return plan(interphase_doc, registry, study_profile, Listener())
+
+
+#: What stage 6 would write for the top concept of the fixture paper. Hand-written rather than
+#: recorded, and grounded in the fixture's own sentences, because these exist to exercise the
+#: rules that check generated content -- not to demonstrate what a model produces.
+ELABORATION = {
+    "long_def": (
+        "It's the crust that forms on the anode as the electrolyte breaks down, and repairing "
+        "it consumes lithium that never comes back."
+    ),
+    "anchor": (
+        "A cast-iron pan seasoning itself: the first heating burns a thin layer onto the metal, "
+        "and that burnt layer is what stops the metal rusting."
+    ),
+    "analogy": "It behaves like a scab that keeps being knocked off and re-formed.",
+    "limit": "A scab heals from the body's own store; this one is paid for out of the cell.",
+    "why": (
+        "Each repair grows fresh interphase from the electrolyte, so every crack costs lithium "
+        "inventory rather than returning it."
+    ),
+}
+
+
+@pytest.fixture
+def elaborated_script(interphase_doc: Document, study_profile: Profile) -> Script:
+    """A plan whose top concept has a gloss, an anchor, an analogy and a why-explanation."""
+    from mimem.ir import Analogy, Anchor, Elaboration
+
+    registry = build_registry(interphase_doc, Listener())
+    concept = registry.ranked()[0]
+    concept.long_def = ELABORATION["long_def"]
+    concept.anchor = Anchor(text=ELABORATION["anchor"], generated_by="fixture", verified=True)
+    concept.analogy = Analogy(
+        text=ELABORATION["analogy"],
+        limit=ELABORATION["limit"],
+        generated_by="fixture",
+        verified=True,
+    )
+    concept.why = Elaboration(text=ELABORATION["why"], generated_by="fixture", verified=True)
+    return plan(interphase_doc, registry, study_profile, Listener())

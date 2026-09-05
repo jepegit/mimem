@@ -20,7 +20,9 @@ from itertools import pairwise
 from mimem.config import Profile
 from mimem.ir import TEACHING_TYPES, BeatType, ExposureForm, Script
 from mimem.lint.rules import Severity, Violation
+from mimem.plan.beats import OWNERSHIP_MARKERS
 from mimem.plan.exposure import exposure_log, spaced
+from mimem.verify import check as check_grounding
 
 #: A shared run of this many words is verbatim repetition, not paraphrase (rule REP-01).
 VERBATIM_NGRAM = 8
@@ -463,6 +465,89 @@ class AnalogiesStateTheirLimit(ScriptRule):
         return out
 
 
+class GeneratedContentIsMarked(ScriptRule):
+    """VOI-02: the listener always knows whose claim they just heard.
+
+    An anchor and an analogy are ours. Said without a marker they are indistinguishable from the
+    paper's own words, and the listener walks away attributing our cast-iron pan to a battery
+    journal. This is the cheapest rule in the suite and one of the most important: everything
+    else in the system is about being *useful*, and this one is about being *honest*.
+    """
+
+    id = "VOI-02"
+    description = "generated content is introduced as generated"
+
+    #: Beat types whose content is ours rather than the source's.
+    OURS = frozenset({BeatType.ANCHOR, BeatType.ANALOGY})
+
+    def check(self, script: Script) -> list[Violation]:
+        return [
+            self._violation(f"{beat.type.value} beat does not say it is ours", beat.text, beat.id)
+            for beat in script.beats()
+            if beat.type in self.OURS
+            and not any(marker in beat.text.lower() for marker in OWNERSHIP_MARKERS)
+        ]
+
+
+class ImageryHasAPause(ScriptRule):
+    """PAU-02: an image the listener is given no time to form is a sentence, not a picture."""
+
+    id = "PAU-02"
+    description = "anchors and analogies are followed by a pause"
+
+    IMAGERY = frozenset({BeatType.ANCHOR, BeatType.ANALOGY})
+
+    def check(self, script: Script) -> list[Violation]:
+        floor = self.profile.pauses.imagery_min
+        return [
+            self._violation(
+                f"pause of {beat.pause_after:.1f}s, under the {floor:.1f}s minimum",
+                beat.text,
+                beat.id,
+            )
+            for beat in script.beats()
+            if beat.type in self.IMAGERY and beat.pause_after < floor
+        ]
+
+
+class GeneratedFactsAreGrounded(ScriptRule):
+    """GRD-03, and ELB-03: the numbers and directions in generated text are the source's.
+
+    Checked against the sentences the beat was written from, which the beat carries in
+    ``written_text`` -- not against the whole document. A sentence that mixes up two unrelated
+    results would pass a document-wide check, and that is exactly the plausible-sounding failure
+    this rule exists for.
+
+    Names are excluded here. The deterministic name check is a warning in
+    :mod:`mimem.verify` for good reason, and an anchor is *supposed* to contain nouns the paper
+    never used -- that is what an image for an abstract idea is.
+    """
+
+    id = "GRD-03"
+    description = "numbers, years and directions in generated text match the source"
+
+    #: Beat types written by a model rather than quoted from the document.
+    WRITTEN = frozenset({BeatType.GLOSS, BeatType.ANCHOR, BeatType.ANALOGY, BeatType.ELABORATION})
+    KINDS = frozenset({"number", "year", "direction"})
+
+    def check(self, script: Script) -> list[Violation]:
+        out: list[Violation] = []
+        for beat in script.beats():
+            if beat.type not in self.WRITTEN or not beat.written_text:
+                continue
+            for finding in check_grounding(beat.text, beat.written_text):
+                if finding.kind not in self.KINDS:
+                    continue
+                out.append(
+                    self._violation(
+                        f"{finding.kind} {finding.value!r}: {finding.message}",
+                        beat.text,
+                        beat.id,
+                    )
+                )
+        return out
+
+
 class ChunksAlignWithSentences(ScriptRule):
     """TTS-04: a chunk never ends mid-sentence.
 
@@ -493,6 +578,9 @@ SCRIPT_RULE_TYPES: tuple[type[ScriptRule], ...] = (
     RepeatsAreNotVerbatim,
     MinimumSpacingGap,
     BeatsAreGrounded,
+    GeneratedContentIsMarked,
+    ImageryHasAPause,
+    GeneratedFactsAreGrounded,
     AnchorsAreUnique,
     AnalogiesStateTheirLimit,
     ChunksAlignWithSentences,

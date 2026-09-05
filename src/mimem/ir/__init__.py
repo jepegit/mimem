@@ -6,6 +6,7 @@ from mimem.ir.concepts import (
     Concept,
     ConceptKind,
     ConceptRegistry,
+    Elaboration,
     Exposure,
 )
 from mimem.ir.ids import asset_id, block_id, document_id, file_sha256, text_sha256
@@ -68,6 +69,7 @@ __all__ = [
     "DiagnosticLevel",
     "Document",
     "DropRecord",
+    "Elaboration",
     "Exposure",
     "ExposureForm",
     "PromptType",

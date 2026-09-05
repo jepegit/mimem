@@ -87,6 +87,7 @@ class _Context:
     covered: set[tuple[str, int, int]] = field(default_factory=set)
     seen_concepts: set[str] = field(default_factory=set)
     announced: set[str] = field(default_factory=set)  # concepts a transition has already named
+    elaborated: set[str] = field(default_factory=set)  # concepts whose gloss and anchor were said
 
 
 def plan(
@@ -134,7 +135,9 @@ def plan(
     # The section-closing cards are kept aside: they are what the review block interleaves.
     closing_cards = list(script.cards)
     script.budget_seconds = budget_seconds(
-        _straight_read_seconds(script), profile.duration_multiplier
+        _straight_read_seconds(script),
+        profile.duration_multiplier,
+        profile.duration_floor_seconds,
     )
     _add_segment_prompts(ctx, script)
 
@@ -163,9 +166,11 @@ def plan(
     # small -- and a budget that is always exceeded is a budget that cuts things nobody asked
     # it to cut.
     script.budget_seconds = budget_seconds(
-        _straight_read_seconds(script), profile.duration_multiplier
+        _straight_read_seconds(script),
+        profile.duration_multiplier,
+        profile.duration_floor_seconds,
     )
-    script.dropped.extend(enforce(script, script.budget_seconds))
+    enforce(script, script.budget_seconds)
 
     # 13. re-check the segment sizes, and say how long the finished programme actually is.
     _split_oversized(ctx, script)
@@ -382,7 +387,9 @@ def _body(
 
         body: list[Beat] = []
         for block in blocks:
-            body.extend(make.exposition_beats(block, ctx.factory, ctx.patterns, skip=ctx.covered))
+            for beat in make.exposition_beats(block, ctx.factory, ctx.patterns, skip=ctx.covered):
+                body.append(beat)
+                body.extend(_elaboration_beats(ctx, beat))
         if not body:
             continue
 
@@ -400,6 +407,47 @@ def _body(
         _close_section(ctx, section, by_section.get(section_id), prequestion_ids, introduced)
         sections.append(section)
     return sections
+
+
+def _elaboration_beats(ctx: _Context, beat: Beat) -> list[Beat]:
+    """What stage 6 wrote about the concepts this beat introduces (rule DIF-02).
+
+    Placed immediately after the sentence that first mentions the concept, and in the order the
+    budget is spent: gloss, anchor, why, analogy. Explaining a term after showing its picture
+    would be handing the listener an image of nothing.
+
+    With no model configured the registry holds none of this and the function returns nothing,
+    which is why ``--local`` produces exactly the M4 programme.
+    """
+    out: list[Beat] = []
+    for concept_id in beat.concept_ids:
+        concept = ctx.registry.concepts.get(concept_id)
+        if concept is None or concept_id in ctx.elaborated:
+            continue
+        ctx.elaborated.add(concept_id)
+        support = ctx.support.by_concept.get(concept_id, [])[:4]
+        spans = [s.span for s in support]
+        source = "\n".join(s.written for s in support)
+        if not spans:
+            continue
+
+        if concept.long_def:
+            out.append(make.gloss_beat(ctx.factory, concept, concept.long_def, spans, source))
+        if concept.anchor is not None:
+            out.append(make.anchor_beat(ctx.factory, concept, concept.anchor.text, source))
+        if concept.why is not None:
+            out.append(
+                make.why_beat(
+                    ctx.factory, concept, concept.why.text, concept.why.spans or spans, source
+                )
+            )
+        if concept.analogy is not None:
+            out.append(
+                make.analogy_beat(
+                    ctx.factory, concept, concept.analogy.text, concept.analogy.limit, source
+                )
+            )
+    return out
 
 
 def _segment(ctx: _Context, beats: list[Beat], section_id: str, title: str) -> list[Segment]:

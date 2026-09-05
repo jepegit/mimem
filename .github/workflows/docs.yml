@@ -40,12 +40,12 @@ jobs:
       - name: Build
         run: uv run zensical build --clean
 
-      # `enablement` turns Pages on the first time this runs, so that publishing the site is a
-      # reviewable line in the repository rather than a settings change nobody can see. It is a
-      # no-op on every subsequent run.
+      # Pages has to be switched on by hand once, in Settings -> Pages -> Source: GitHub
+      # Actions. The `enablement: true` option on this action exists for exactly this and was
+      # tried first; the workflow's own token cannot create a Pages site ("Resource not
+      # accessible by integration"), so the switch is a person's job. Until it is flipped this
+      # job fails on the first step, which is the right kind of loud.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

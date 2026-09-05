@@ -107,6 +107,9 @@ COMPOUND_UNITS: dict[str, tuple[str, str]] = {
     "%": ("percent", "percent"),
 }
 
+#: Beyond this, trailing digits name a product rather than raise a unit to a power.
+MAX_UNIT_EXPONENT = 4
+
 #: Exponents that have a spoken name rather than a number.
 _EXPONENT_WORDS = {2: "square", 3: "cubic"}
 
@@ -131,6 +134,10 @@ def _split_exponent(symbol: str) -> tuple[str, int]:
     if not m or not m.group(1):
         return symbol, 1
     stem, exponent = m.group(1), int(m.group(2))
+    # Real unit exponents are small. "V10" is a product name, not volts to the tenth power,
+    # and treating it as a unit leaves its digits in the audio track.
+    if abs(exponent) > MAX_UNIT_EXPONENT:
+        return symbol, 1
     # A trailing digit is only an exponent if the stem is a unit we recognise; otherwise it is
     # part of a name ("NMC811", "H2O") and must not be pulled apart.
     if _lookup(stem) is None:

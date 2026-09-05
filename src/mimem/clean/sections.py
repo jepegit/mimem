@@ -316,21 +316,67 @@ def _looks_like_author_list(text: str) -> bool:
     return separators >= 1 and capitals >= 2 and len(text.split()) <= 60
 
 
+#: How far back from the end of the document to look for the start of a reference list. A Cell
+#: Press article can run to thirty-odd entries, each its own block, spread over three pages.
+MAX_REFERENCE_SCAN = 200
+
+#: Entries that must be found before the tail is called a reference list.
+MIN_REFERENCE_RUN = 5
+
+#: Non-entry blocks tolerated inside the run: a running head, a page number, a stray fragment,
+#: an entry whose year the extractor mangled.
+MAX_REFERENCE_GAP = 3
+
+_REFERENCE_HEADING_TEXT = re.compile(
+    r"^\s*(references|bibliography|literature cited)\s*:?\s*$", re.I
+)
+
+
+def _reference_run_start(blocks: list[Block]) -> int | None:
+    """Index in ``blocks`` where the trailing reference list begins, or ``None``.
+
+    Walking *backwards* from the end and stopping at sustained non-entry content is what
+    matters here. Taking a fixed-size tail instead -- which is what this did first -- finds the
+    end of the list and misses its beginning: on a paper with thirty references, entries one
+    to fifteen fell outside a twenty-five block window and were narrated as prose, DOIs and all.
+    """
+    start: int | None = None
+    entries = 0
+    gap = 0
+    for i in range(len(blocks) - 1, -1, -1):
+        block = blocks[i]
+        if _REFERENCE_HEADING_TEXT.match(block.text):
+            return i  # the list's own heading, missed by the heading heuristics
+        if _is_reference_entry(block.text):
+            start, entries, gap = i, entries + 1, 0
+            continue
+        if block.kind is BlockKind.PAGE_ARTIFACT or not block.text.strip():
+            continue
+        gap += 1
+        if gap > MAX_REFERENCE_GAP:
+            break
+    return start if entries >= MIN_REFERENCE_RUN else None
+
+
 def _rescue_unheaded_references(doc: Document) -> None:
     """Some PDFs lose the 'References' heading entirely; the tail still looks like a list."""
     if any(b.role is BlockRole.REFERENCES for b in doc.blocks):
         return
-    tail = [b for b in doc.blocks if b.text.strip() and b.kind is not BlockKind.HEADING][-25:]
-    hits = [b for b in tail if _is_reference_entry(b.text)]
-    if len(hits) >= 5:
-        start = min(b.order for b in hits)
-        for block in doc.blocks:
-            if block.order >= start and block.text.strip():
-                block.role = BlockRole.REFERENCES
-                if block.kind is BlockKind.PARAGRAPH:
-                    block.kind = BlockKind.REFERENCE
-        doc.note(
-            "references_without_heading",
-            f"treated {len(hits)} trailing blocks as a reference list (no heading found)",
-            stage="clean",
-        )
+    window = [b for b in doc.blocks if b.kind is not BlockKind.HEADING][-MAX_REFERENCE_SCAN:]
+    index = _reference_run_start(window)
+    if index is None:
+        return
+
+    start = window[index].order
+    marked = 0
+    for block in doc.blocks:
+        if block.order >= start and block.text.strip():
+            block.role = BlockRole.REFERENCES
+            if block.kind is BlockKind.PARAGRAPH:
+                block.kind = BlockKind.REFERENCE
+            marked += 1
+    doc.note(
+        "references_without_heading",
+        f"treated the last {marked} blocks as a reference list (no heading found)",
+        stage="clean",
+    )

@@ -69,6 +69,17 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     ("correspondence", re.compile(r"^\s*(correspondence|corresponding author)\b", re.I)),
     (
+        # "Supplemental information can be found online at ..." -- a pointer to something the
+        # listener cannot follow, ending in an identifier that must never be spoken (NUM-05).
+        "pointer to material the listener cannot reach",
+        re.compile(
+            r"\b(supplement(al|ary)\s+(information|material|data)"
+            r"|(data|code)\s+(and\s+\w+\s+)?(is|are)\s+available)\b.{0,80}"
+            r"\b(online|at|from|upon request|in the (repository|appendix))\b",
+            re.I | re.S,
+        ),
+    ),
+    (
         "article type banner",
         re.compile(
             r"^\s*(research(\s+article)?|original\s+(research|article)|review(\s+article)?"

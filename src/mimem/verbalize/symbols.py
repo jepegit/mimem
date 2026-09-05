@@ -59,9 +59,9 @@ ABBREVIATIONS = {
     r"\bwrt\b": "with respect to",
     r"\bw\.r\.t\.": "with respect to",
     r"\band/or\b": "or",
-    # "et al." is a citation fragment wherever it appears, including in running prose
-    # ("Gorsch et al. compare ..."), and CIT-01 forbids it in the audio track.
-    r"\bet\s+al\.?": "and colleagues",
+    # "et al." is handled in `mimem.verbalize.citations`, not here. It has to run *before*
+    # superscript-marker stripping so that "Heimes et al.24" becomes "Heimes and colleagues24"
+    # in time for the lower-case-letter guard to recognise the marker.
 }
 
 #: A surviving math placeholder (see mimem.clean.extraction). The symbol is not recoverable,

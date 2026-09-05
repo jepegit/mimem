@@ -17,10 +17,12 @@ from rich.table import Table
 
 from mimem import __version__
 from mimem.clean import clean as run_clean
+from mimem.concepts import build as build_registry
+from mimem.concepts import norms
 from mimem.config import Settings, load_listener, load_profile
 from mimem.ingest import IngestError, available_extensions
 from mimem.ingest import load as run_ingest
-from mimem.ir import Block, BlockKind, BlockRole, DiagnosticLevel, Document
+from mimem.ir import Block, BlockKind, BlockRole, ConceptRegistry, DiagnosticLevel, Document
 from mimem.lint import LintReport, Severity
 from mimem.lint import lint as run_lint
 from mimem.render import narrate as run_narrate
@@ -175,6 +177,64 @@ def triage(
         report.write_text(drop_report(doc), encoding="utf-8")
         console.print(f"[green]wrote[/] {report}")
     _print_diagnostics(doc)
+
+
+@app.command()
+def concepts(
+    ir: Annotated[Path, typer.Argument(help="IR JSON")],
+    out: Annotated[Path | None, typer.Option("--out", "-o", help="registry JSON")] = None,
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+    top: Annotated[int, typer.Option("--top", help="how many to print")] = 20,
+) -> None:
+    """Stage 4: extract the concepts and score them by difficulty and importance.
+
+    The registry it writes is meant to be edited. Anything you put under a concept's
+    ``overrides`` key survives the next run, so correcting a bad ranking is a one-line change
+    rather than an argument with a heuristic.
+    """
+    doc = _read_document(ir)
+    settings = Settings()
+    listener = load_listener(listener_file, settings)
+
+    target = out or ir.with_name(ir.stem.replace(".ir", "") + ".registry.json")
+    previous = None
+    if target.exists():
+        try:
+            previous = ConceptRegistry.from_json(target.read_bytes())
+        except Exception as exc:  # a corrupt registry should not lose the run
+            console.print(f"[yellow]ignoring unreadable registry[/] {target}: {exc}", style="dim")
+
+    registry = build_registry(doc, listener, previous)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(registry.to_json(), encoding="utf-8")
+
+    norms_status = norms.status()
+    console.print(f"[green]wrote[/] {target}  ({len(registry.concepts)} concepts)")
+    console.print(
+        f"  concreteness from [bold]{norms_status.source}[/]"
+        + (f" ({norms_status.entries} words)" if norms_status.entries else " (no norms file)"),
+        style="dim",
+    )
+    if norms_status.source == "morphology":
+        console.print(
+            "  for measured scores, put the Brysbaert 2014 concreteness CSV at "
+            "data/concreteness.csv or set MIMEM_CONCRETENESS_FILE",
+            style="dim",
+        )
+
+    table = Table("concept", "diff", "impt", "budget", "n", "kind", title=f"top {top}")
+    for c in registry.ranked(top):
+        table.add_row(
+            c.canonical[:44],
+            f"{c.difficulty:.2f}",
+            f"{c.importance:.2f}",
+            f"{c.budget:.3f}",
+            str(c.mentions),
+            c.kind.value,
+        )
+    console.print(table)
+    if listener.name != "default":
+        console.print(f"scored for listener [bold]{listener.name}[/]", style="dim")
 
 
 @app.command()

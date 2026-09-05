@@ -1,5 +1,13 @@
 """The mimem intermediate representation."""
 
+from mimem.ir.concepts import (
+    Analogy,
+    Anchor,
+    Concept,
+    ConceptKind,
+    ConceptRegistry,
+    Exposure,
+)
 from mimem.ir.ids import asset_id, block_id, document_id, file_sha256, text_sha256
 from mimem.ir.models import (
     NON_CONTENT_ROLES,
@@ -22,15 +30,21 @@ from mimem.ir.models import (
 __all__ = [
     "NON_CONTENT_ROLES",
     "SCHEMA_VERSION",
+    "Analogy",
+    "Anchor",
     "Asset",
     "AssetKind",
     "BBox",
     "Block",
     "BlockKind",
     "BlockRole",
+    "Concept",
+    "ConceptKind",
+    "ConceptRegistry",
     "Diagnostic",
     "DiagnosticLevel",
     "Document",
+    "Exposure",
     "SourceMeta",
     "Span",
     "TriageAction",

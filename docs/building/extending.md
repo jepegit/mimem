@@ -33,7 +33,8 @@ class DocxAdapter(Adapter):
     extensions = frozenset({".docx"})
 
     def load(self, path: Path) -> Document:
-        ...  # produce Blocks with kind, role, text, order, page
+        """Produce Blocks with a kind, a role, text, an order and a page."""
+        raise NotImplementedError
 ```
 
 The contract is that you return `Document` and assets. If your format tempts you to add a branch

@@ -9,10 +9,12 @@ a careful reader would have done**, and then hands the result to a text-to-speec
 
 ## Status
 
-Milestones **M0** (skeleton), **M1** (ingest + clean) and **M2** (triage, deterministic
-verbalizers, narration, lint) are done. A paper now comes out as narration text with no citation
+Milestones **M0** (skeleton), **M1** (ingest + clean), **M2** (triage, deterministic
+verbalizers, narration, lint) and **M3** (concepts and scoring) are done. A paper now comes out as narration text with no citation
 noise, no raw numerals and nothing unspeakable in it — a straight reading, not yet the memorable
-version. Prequestions, retrieval prompts, concrete anchors and spaced repetition are M3–M6. See
+version. It also knows which ideas the paper turns on and how hard each one is, which is what decides
+where effort goes. Prequestions, retrieval prompts, concrete anchors and spaced repetition are
+M4–M6. See
 [docs/PLAN-part1.md](docs/PLAN-part1.md) §7 for the roadmap.
 
 ## Try it

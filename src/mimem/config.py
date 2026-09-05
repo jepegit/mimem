@@ -132,6 +132,13 @@ class Listener(BaseModel):
     name: str = "default"
     default_expertise: Expertise = Expertise.FAMILIAR
     expertise: dict[str, Expertise] = Field(default_factory=dict)
+
+    #: What vocabulary belongs to a domain. Without this, expertise is inert: matching a domain
+    #: *name* against a concept only ever fires for a concept that happens to contain the word
+    #: "electrochemistry", which no real concept does. Naming the domain's vocabulary is the
+    #: cheap, honest way to make "I am an expert here" mean something.
+    domain_terms: dict[str, list[str]] = Field(default_factory=dict)
+
     known_terms: list[str] = Field(default_factory=list)
     lexicon: dict[str, str] = Field(default_factory=dict)  # term -> spoken form (rule SYM-03)
     wpm: float | None = None  # overrides the profile
@@ -142,8 +149,31 @@ class Listener(BaseModel):
         return self.expertise.get(domain.lower(), self.default_expertise)
 
     def knows(self, term: str) -> bool:
+        """Is this exactly a term the listener listed?"""
         t = term.strip().lower()
         return any(t == k.strip().lower() for k in self.known_terms)
+
+    def knows_part_of(self, term: str) -> bool:
+        """Does the listener know a *component* of this term?
+
+        "anode active material" is easier for someone who already owns "anode" than for someone
+        who does not, even though they never listed the compound. Exact-match-only made
+        ``known_terms`` almost inert on real papers, where concepts are compounds.
+        """
+        words = {w.strip(".,;:").lower() for w in term.split()}
+        return any(
+            set(known.lower().split()) <= words and known.strip() for known in self.known_terms
+        )
+
+    def domain_of(self, term: str) -> str | None:
+        """Which declared domain this term belongs to, by its vocabulary."""
+        words = {w.strip(".,;:-").lower() for w in term.split()}
+        for domain, vocabulary in self.domain_terms.items():
+            for entry in vocabulary:
+                parts = {p.lower() for p in entry.split()}
+                if parts <= words:
+                    return domain
+        return None
 
 
 class Settings(BaseSettings):

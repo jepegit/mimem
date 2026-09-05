@@ -548,9 +548,47 @@ On the three real papers, lint errors went **189 / 126 / 137 → 0 / 0 / 0**.
   the concept registry and the rewriting stages, so they arrive with M4/M5 — which is why `SENT-01`
   and the acronym check are warnings rather than errors.
 
-**M3 — concepts and scoring (1 week).** Extraction, Brysbaert norms, difficulty/importance,
-human-editable registry. *Done when:* for a paper in your own field, the top-20 concepts by
-`difficulty x importance` look right to you, and the listener-profile switch visibly changes them.
+**M3 — concepts and scoring — done (2026-09-05).** Extraction, difficulty and importance
+scoring, a human-editable registry. Still no LLM. *Done when:* for a paper in your own field the
+top concepts look right, and the listener profile visibly changes them. Both hold: on the
+teardown paper an expert reader's top concept becomes "teardown analysis" while "prismatic cell"
+falls away, and on the AI review it is "artificial intelligence", "battery management system",
+"data scarcity" — the paper's actual claims. `mimem concepts paper.ir.json` is the command;
+173 tests.
+
+*Design notes and deviations:*
+
+- **The Brysbaert concreteness norms are not vendored.** They are someone else's dataset with
+  their own terms, and about 4 MB. `concepts/norms.py` loads them from `data/concreteness.csv`
+  or `MIMEM_CONCRETENESS_FILE` when present, and otherwise falls back to a morphological
+  heuristic — English marks abstraction in its suffixes. The fallback is much blunter and
+  `mimem concepts` says which source is live on every run, because a guess and a measurement
+  must never be indistinguishable.
+- **spaCy was not needed.** The plan called for noun-phrase chunking; in practice acronym
+  definitions, definitional sentences and repeated sentence-bounded n-grams find the concepts
+  without a model or its download.
+- **Domain expertise needed a vocabulary.** The first version matched a domain *name* against
+  concept text, which is inert: no concept in a real paper is called "electrochemistry", so
+  every one fell back to the default level and declaring yourself an expert changed nothing at
+  all. `listener.domain_terms` now names each domain's vocabulary, and `known_terms` also makes
+  *compounds* easier — knowing "anode" makes "anode active material" less new ground.
+
+*Four filters, each from watching real output:*
+
+1. **Author names.** A corresponding author's surname recurs on every page. The document already
+   knows who wrote it, so the filter asks it rather than guessing from capitalisation.
+2. **Sentence-bounded n-grams.** A window running over a full stop invents phrases nobody wrote.
+3. **Coordinated phrases and citation fragments.** "charging and discharging" is two ideas;
+   "et al" is neither. An internal *preposition* is fine — "state of charge" is one term.
+4. **Overlapping n-grams and trailing verbs.** "battery degradation" and "lithium-ion battery
+   degradation" competed for one budget; "battery degradation was measured" is not a concept.
+
+*Known limitations:*
+
+- Concreteness is morphological until the norms file is present, which mostly costs precision on
+  `IMG-01` anchor selection — the rule that needs it does not arrive until M5.
+- A term named after one of the paper's own authors would be filtered out. Rare, and the registry
+  is editable when it happens.
 
 **M4 — planner and renderer, no LLM (1.5 weeks).** Beats, segmentation, spacing scheduler, retrieval
 placement using template-generated prompts, `audio.md` / `study.md` / `cards.json` / `manifest.json`.

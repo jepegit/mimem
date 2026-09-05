@@ -17,7 +17,49 @@ expertise:
   statistics: familiar
   biology: novice
 
+# What vocabulary belongs to each domain above. Without this, expertise does nothing: no
+# concept in a real paper is called "electrochemistry", so every one of them would fall back to
+# the default level and declaring yourself an expert would change no ranking at all.
+domain_terms:
+  electrochemistry:
+    - cell
+    - electrode
+    - anode
+    - cathode
+    - electrolyte
+    - lithium
+    - capacity
+    - voltage
+    - current
+    - charge
+    - discharge
+    - cycling
+    - interphase
+    - impedance
+  battery-materials:
+    - graphite
+    - silicon
+    - NMC
+    - LFP
+    - separator
+    - binder
+    - active material
+    - jelly roll
+    - prismatic
+    - cylindrical
+  machine-learning:
+    - model
+    - training
+    - dataset
+    - hyperparameter
+    - regression
+    - neural
+    - prediction
+    - feature
+
 # Terms you never need explained, whatever the difficulty model thinks.
+# A term here also makes any compound containing it easier: knowing "anode" makes
+# "anode active material" less new ground, even though you never listed the compound.
 known_terms:
   - electrolyte
   - anode

@@ -146,6 +146,15 @@ def test_ambiguous_and_non_units_are_not_units(symbol: str) -> None:
 # -- citations -------------------------------------------------------------------------------
 
 
+def test_et_al_is_expanded_before_superscripts_are_stripped() -> None:
+    """Ordering, not cosmetics: "Heimes et al.24" only loses its marker once "et al." has
+    become "and colleagues", because the marker guard requires a lower-case letter in front."""
+    assert "and colleagues" in verbalize_citations("Gorsch et al. compare cells")
+    out = verbalize_citations("proposed by Heimes et al.24 and Liu", strip_superscripts=True)
+    assert "24" not in out
+    assert "and colleagues" in out
+
+
 def test_bracketed_citations_are_removed() -> None:
     assert verbalize_citations("as shown [12] in earlier work [1,2]") == "as shown in earlier work"
 
@@ -214,7 +223,6 @@ def test_short_asides_become_appositives_and_long_ones_go() -> None:
         ("x ≈ 5", "approximately"),
         ("A → B", "leads to"),
         ("e.g. this", "for example"),
-        ("Smith et al. showed", "and colleagues"),
         ("a ± b", "plus or minus"),
     ],
 )
@@ -244,3 +252,32 @@ def test_pipeline_order_survives_a_realistic_sentence(profile: Profile) -> None:
     assert "eighty two point one plus or minus one point four percent" in out
     assert not any(c.isdigit() for c in out)
     assert "[" not in out and "(" not in out
+
+
+# -- regressions from the real papers ---------------------------------------------------------
+
+
+def test_a_trailing_full_stop_does_not_hide_a_designation() -> None:
+    """ "XP0256." was skipped because the lookahead excluded any following period -- including
+    the one that ends the sentence."""
+    assert verbalize_numbers("grant no. 3 XP0256.") == ("grant no. three XP zero two, five six.")
+
+
+def test_a_large_trailing_number_is_a_product_name_not_an_exponent() -> None:
+    """ "V10" is a product, not volts to the tenth power; treating it as a unit left its digits
+    in the audio track."""
+    assert spoken_unit("V10") is None
+    assert verbalize_numbers("is V10 kWh cheaper") == "is V one zero kWh cheaper"
+
+
+def test_a_unit_with_no_number_in_front_is_still_spoken() -> None:
+    """A table fragment: no number is coming, so the unit has to be spoken where it stands."""
+    assert verbalize_numbers("calculated, mAh cm2 Diameter") == (
+        "calculated, mAh square centimetres Diameter"
+    )
+    # ...but when a number *is* in front, the unit still belongs to it.
+    assert verbalize_numbers("was 5 cm2 wide") == "was five square centimetres wide"
+
+
+def test_plural_cross_references_are_dropped() -> None:
+    assert "S2" not in verbalize_citations("In Tables S2 and S3, the composition is given")

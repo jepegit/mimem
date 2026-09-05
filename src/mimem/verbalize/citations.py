@@ -40,8 +40,8 @@ ISBN = re.compile(r"\bISBN[- ]?(?:13|10)?:?\s*[\d-]{10,17}\b", re.I)
 CROSS_REFERENCE = re.compile(
     r"\b(?:as\s+)?(?:shown|seen|illustrated|summari[sz]ed|listed|given|presented|reported)?\s*"
     r"\b(?:in|by)?\s*"
-    r"\(?\b(?:Fig(?:ure|s?)?|Table|Scheme|Eq(?:uation|s?)?|Sect(?:ion)?|Ref(?:s?|erence)?)\.?\s*"
-    r"(?:S)?\d+[a-z]?(?:\s*[-–,]\s*(?:S)?\d+[a-z]?)*\)?",
+    r"\(?\b(?:Fig(?:ure|s?)?|Tables?|Schemes?|Eq(?:uation|s?)?|Sect(?:ion)?s?|Ref(?:s?|erence)?)\.?\s*"
+    r"(?:S)?\d+[a-z]?(?:\s*(?:[-–,]|and)\s*(?:S)?\d+[a-z]?)*\)?",
     re.IGNORECASE,
 )
 
@@ -119,10 +119,15 @@ def verbalize_citations(
     drop_cross_references: bool = True,
     strip_superscripts: bool = False,
 ) -> str:
-    """Apply the citation policy to a piece of text."""
+    """Apply the citation policy to a piece of text.
+
+    The order inside here matters. Parenthetical citations go first, because they contain
+    "et al." themselves; the bare in-prose "et al." is expanded next; and only then are
+    superscript markers stripped. That sequence is what catches "Heimes et al.24", where the
+    marker sits after a full stop and so needs the expansion to "and colleagues" to have
+    happened before the lower-case-letter guard can see it.
+    """
     text = strip_identifiers(text)
-    if strip_superscripts:
-        text = strip_superscript_citations(text)
 
     if verbosity is CitationVerbosity.ATTRIBUTED:
         text = AUTHOR_YEAR_CITATION.sub(_attribute, text)
@@ -130,6 +135,13 @@ def verbalize_citations(
     else:
         text = AUTHOR_YEAR_CITATION.sub("", text)
         text = TRAILING_YEAR.sub("", text)
+
+    # "Gorsch et al. compare ..." is a citation fragment in running prose, and CIT-01 forbids
+    # it in the audio track whatever the verbosity setting.
+    text = _ET_AL.sub("and colleagues", text)
+
+    if strip_superscripts:
+        text = strip_superscript_citations(text)
 
     text = NUMERIC_CITATION.sub("", text)
     if drop_cross_references:

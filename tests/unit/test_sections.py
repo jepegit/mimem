@@ -215,3 +215,31 @@ def test_unidentified_front_matter_stays_unknown_rather_than_becoming_body() -> 
         )
     )
     assert doc.blocks[1].role is BlockRole.UNKNOWN
+
+
+def test_a_long_reference_list_is_found_from_its_start_not_its_end() -> None:
+    """A fixed-size tail finds the end of the list and misses its beginning: on a paper with
+    thirty references, entries one to fifteen were narrated as prose, DOIs and all."""
+    items: list[tuple[str, str, int | None]] = [
+        ("heading", "4. Conclusions", 1),
+        ("paragraph", "Capacity fade is dominated by interphase repair.", None),
+    ]
+    items += [
+        (
+            "paragraph",
+            f"{i}. Author, A., and Other, B. (20{i:02d}). A title. Journal 12, 3-4.",
+            None,
+        )
+        for i in range(1, 31)
+    ]
+    doc = assign_sections(_build(*items))
+    references = doc.by_role(BlockRole.REFERENCES)
+    assert len(references) == 30
+    assert doc.blocks[1].role is not BlockRole.REFERENCES  # the conclusion survives
+
+
+def test_a_short_run_of_numbered_lines_is_not_a_reference_list() -> None:
+    items = [("heading", "3. Results", 1)]
+    items += [("paragraph", f"{i}. A numbered step in the protocol.", None) for i in range(1, 4)]
+    doc = assign_sections(_build(*items))
+    assert not doc.by_role(BlockRole.REFERENCES)

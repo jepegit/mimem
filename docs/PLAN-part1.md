@@ -496,8 +496,8 @@ first stage 8 renderer (`audio.md` + `study.md`) and the stage 9 lint suite. Sti
 *Done when:* a paper renders to narration text with no citation noise, no raw numerals and no
 unspeakable characters, and `mimem lint` passes `TTS-01`/`NUM-02`/`CIT-01`. ✔
 
-On the three real papers, lint errors went **189 / 126 / 137 → 1 / 10 / 0**; the Springer article
-is clean. `mimem narrate paper.ir.json -o out/` is the command; 145 tests.
+On the three real papers, lint errors went **189 / 126 / 137 → 0 / 0 / 0**.
+`mimem narrate paper.ir.json -o out/` is the command; 152 tests.
 
 *Design notes and deviations:*
 
@@ -519,16 +519,34 @@ is clean. `mimem narrate paper.ir.json -o out/` is the command; 145 tests.
   stripping and math-placeholder handling both look at the whole document before acting, because a
   single digit welded to a word is far more likely to be a variable than a citation.
 
-*Known limitations, all visible in the lint output rather than hidden:*
+*A second pass took the remaining errors to zero.* Each was its own small mistake:
 
-- A **Cell Press reference list** that keeps neither a "References" heading nor a recognisable entry
-  format survives triage, and its DOIs and page numbers are the entire remaining error count on
-  that paper. Better reference detection is the fix.
+- **Reference lists were found by their end, not their start.** The rescue for a missing
+  "References" heading looked at a fixed 25-block tail, which finds the last entries and misses the
+  first: on a paper with thirty references, entries one to fifteen were narrated as prose, DOIs and
+  all. It now walks backwards from the end of the document and stops at sustained non-entry content,
+  tolerating the page furniture and mangled entries inside the run.
+- **A trailing full stop hid a designation.** `XP0256.` was skipped because the lookahead excluded
+  any following period — including the one that ends the sentence.
+- **A large trailing number is a product name, not an exponent.** `V10` was resolving as "volts to
+  the power ten" and so was left alone as a unit, digits and all. Unit exponents are now capped.
+- **A unit with no number in front was never spoken.** Correct for `5 cm2`, wrong for a table
+  fragment like `mAh cm2`, where no number is coming.
+- **`et al.` had to move before superscript stripping.** "Heimes et al.24" only loses its marker
+  once "et al." has become "and colleagues", because the marker guard requires a lower-case letter
+  in front. It now lives in the citations module, where it belongs.
+- **Plural cross-references** (`Tables S2 and S3`) and **pointers to material the listener cannot
+  reach** ("supplemental information can be found online at …") are dropped.
+
+**All three papers are lint-clean.**
+
+*Known limitations, visible in the lint output rather than hidden:*
+
 - **Model designations** (`Tesla 4680`, `18650`) are read as quantities unless the lexicon says
-  otherwise; the digits welded to letters case (`NMC811`, `R2`, `H2O`) is handled automatically.
-- **Acronym expansion** and **sentence shortening** are the two large warning classes that remain.
-  Both need the concept registry and the rewriting stages, so they arrive with M4/M5 — which is why
-  `SENT-01` and the acronym check are warnings rather than errors.
+  otherwise; the digits-welded-to-letters case (`NMC811`, `R2`, `H2O`) is handled automatically.
+- **Acronym expansion** and **sentence shortening** are the two remaining warning classes. Both need
+  the concept registry and the rewriting stages, so they arrive with M4/M5 — which is why `SENT-01`
+  and the acronym check are warnings rather than errors.
 
 **M3 — concepts and scoring (1 week).** Extraction, Brysbaert norms, difficulty/importance,
 human-editable registry. *Done when:* for a paper in your own field, the top-20 concepts by

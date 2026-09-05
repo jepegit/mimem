@@ -81,6 +81,9 @@ CHUNK_SIZE = 2
 
 _MINUS = "-−–—"
 
+#: A number immediately before a unit token, meaning the unit belongs to it.
+_NUMBER_BEFORE = re.compile(r"\d[\d,.]*\s*$")
+
 
 def _under_thousand(n: int) -> str:
     if n < 20:
@@ -249,7 +252,9 @@ class NumberVerbalizer:
             # handler can check it against the unit lexicon first, because "cm2" is an exponent
             # and belongs to the number that precedes it.
             (
-                re.compile(r"(?<![\w.])(?P<token>(?=\w*[A-Za-z])(?=\w*\d)[A-Za-z0-9]+)(?![\w.])"),
+                re.compile(
+                    r"(?<![\w.])(?P<token>(?=\w*[A-Za-z])(?=\w*\d)[A-Za-z0-9]+)(?!\w)(?!\.\d)"
+                ),
                 "designation",
             ),
             (re.compile(rf"(?<![\w.])(?P<v>{num})" + unit.format(n="4")), "plain"),
@@ -283,8 +288,14 @@ class NumberVerbalizer:
             return ordinal_to_words(int(m["ord"]))
         if kind == "designation":
             token = m["token"]
-            if spoken_unit(token) is not None:
-                return token  # "cm2" is an exponent; the plain pass will attach it to its number
+            unit = spoken_unit(token)
+            if unit is not None:
+                # "5 cm2" -- leave it for the plain pass, which attaches it to its number.
+                # "mAh cm2" with nothing in front is a table fragment: no number is coming, so
+                # speak the unit here or its digits reach the engine.
+                if _NUMBER_BEFORE.search(m.string[: m.start()]):
+                    return token
+                return unit
             return re.sub(r"\d+", lambda d: f" {digits_to_words(d.group(0))} ", token).strip()
         words = self._words(m["v"])
         return _attach_unit(m["v"], m.group("u4"), words)

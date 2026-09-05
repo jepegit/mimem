@@ -19,13 +19,24 @@ from mimem import __version__
 from mimem.clean import clean as run_clean
 from mimem.concepts import build as build_registry
 from mimem.concepts import norms
-from mimem.config import Settings, load_listener, load_profile
+from mimem.config import Listener, Profile, Settings, load_listener, load_profile
 from mimem.ingest import IngestError, available_extensions
 from mimem.ingest import load as run_ingest
-from mimem.ir import Block, BlockKind, BlockRole, ConceptRegistry, DiagnosticLevel, Document
+from mimem.ir import (
+    Block,
+    BlockKind,
+    BlockRole,
+    ConceptRegistry,
+    DiagnosticLevel,
+    Document,
+    Script,
+)
 from mimem.lint import LintReport, Severity
 from mimem.lint import lint as run_lint
+from mimem.lint import lint_script as run_lint_script
+from mimem.plan import plan as run_plan
 from mimem.render import narrate as run_narrate
+from mimem.render import render as run_render
 from mimem.triage import drop_report
 from mimem.triage import triage as run_triage
 
@@ -280,29 +291,267 @@ def narrate(
 
 @app.command()
 def lint(
-    target: Annotated[Path, typer.Argument(help="audio.md, or a directory containing it")],
+    target: Annotated[Path, typer.Argument(help="a build directory, audio.md, or script.json")],
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
 ) -> None:
-    """Stage 9: check narration text against the design rules."""
-    path = target / "audio.md" if target.is_dir() else target
-    if not path.exists():
-        _fail(f"no such file: {path}")
-        return
-    report = run_lint(path.read_text(encoding="utf-8"))
+    """Stage 9: the acceptance test.
+
+    Given a build directory it checks both halves -- the narration text against the speakability
+    rules, and the plan against the structure, retrieval and spacing rules. Given a bare
+    ``audio.md`` it can only do the first, and says so.
+    """
+    settings = Settings()
+    profile, _ = _profile_and_listener(profile_name, None, settings)
+
+    script_file = _find_script(target)
+    if script_file is not None:
+        script = _read_script(script_file)
+        audio = target / "audio.md" if target.is_dir() else None
+        report = run_lint_script(
+            script,
+            audio.read_text(encoding="utf-8") if audio and audio.exists() else None,
+            profile,
+        )
+    else:
+        path = target / "audio.md" if target.is_dir() else target
+        if not path.exists():
+            _fail(f"no such file: {path}")
+            return
+        console.print("[dim]text rules only; no script.json here to check the structure[/]")
+        report = run_lint(path.read_text(encoding="utf-8"))
+
     _report_lint(report)
     if not report.ok:
         raise typer.Exit(code=1)
 
 
 @app.command()
-def build(
-    source: Annotated[Path, typer.Argument()],
+def plan(
+    ir: Annotated[Path, typer.Argument(help="triaged IR JSON")],
+    out: Annotated[Path | None, typer.Option("--out", "-o", help="script JSON")] = None,
+    registry_file: Annotated[
+        Path | None, typer.Option("--registry", help="registry JSON; built if absent")
+    ] = None,
     profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
 ) -> None:
-    """Full pipeline. Not available yet -- the learning-design stages land in M4-M6."""
-    _fail(
-        "`build` needs stages 4, 6 and 7 (concepts, elaboration, planning), which are not "
-        "implemented yet -- see docs/PLAN-part1.md. Today: `mimem ingest` then `mimem narrate`."
+    """Stage 7: lay out the beats, the segments, the prompts and the spacing.
+
+    This is where the design rules become structure: an orientation block, a term pre-load,
+    sections that end on a question, concepts that come back at increasing intervals, and a
+    review that interleaves. No model is called; everything here is a source sentence or a
+    named template.
+    """
+    settings = Settings()
+    profile, listener = _profile_and_listener(profile_name, listener_file, settings)
+    doc = run_triage(_read_document(ir))
+
+    registry = _load_or_build_registry(doc, registry_file, ir, listener)
+    script = run_plan(doc, registry, profile, listener)
+
+    target = out or ir.with_name(ir.stem.replace(".ir", "") + ".script.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(script.to_json(), encoding="utf-8")
+    console.print(f"[green]wrote[/] {target}")
+    _print_script_summary(script, profile)
+
+
+@app.command()
+def render(
+    script_file: Annotated[Path, typer.Argument(help="script JSON from `mimem plan`")],
+    out_dir: Annotated[Path, typer.Option("--out", "-o", help="output directory")] = Path("out"),
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    check: Annotated[bool, typer.Option("--lint/--no-lint", help="lint the result")] = True,
+) -> None:
+    """Stage 8: audio.md, study.md, cards.json and manifest.json."""
+    settings = Settings()
+    script = _read_script(script_file)
+    profile, _ = _profile_and_listener(profile_name, None, settings)
+
+    artefacts = run_render(script)
+    written = artefacts.write(out_dir)
+    for path in written:
+        console.print(f"[green]wrote[/] {path}")
+    if check:
+        _report_lint(run_lint_script(script, artefacts.audio, profile))
+
+
+@app.command()
+def explain(
+    target: Annotated[Path, typer.Argument(help="script JSON, or a directory containing one")],
+    beat: Annotated[str, typer.Option("--beat", help="beat ID from manifest.json")],
+) -> None:
+    """Why does this beat exist? Which rule produced it, and from which source span.
+
+    The plan calls for this from day one, and the reason is tuning: without it, every judgement
+    about the output is an argument about a black box.
+    """
+    script = _read_script(_script_path(target))
+    try:
+        found = script.beat(beat)
+    except KeyError:
+        _fail(f"no beat {beat} in {target}")
+        return
+
+    console.print(f"[bold]{found.type.value}[/]  {found.id}")
+    console.print(f"  rules: {', '.join(found.rules) or '-'}", style="dim")
+    console.print(
+        f"  {found.est_seconds:.1f}s speech, {found.pause_after:.1f}s pause, "
+        f"{'generated' if found.generated else 'from the source'}",
+        style="dim",
     )
+    if found.provenance:
+        console.print(f"  written by: {found.provenance.generator}", style="dim")
+    section = script.section_of(found.id)
+    if section:
+        console.print(f"  section: {section.title}", style="dim")
+    for concept_id in found.concept_ids:
+        concept = script.registry.get(concept_id)
+        if concept:
+            console.print(
+                f"  concept: {concept.canonical} "
+                f"(difficulty {concept.difficulty:.2f}, importance {concept.importance:.2f})",
+                style="dim",
+            )
+    console.print(f"\n{found.text}\n")
+
+    doc = _sibling_document(target)
+    for span in found.spans:
+        where = f"p{span.page}" if span.page else span.block_id[:10]
+        console.print(f"[bold]source[/] {where}", style="dim")
+        if doc is not None:
+            try:
+                console.print(f"  {doc.text_of(span).strip()}")
+            except KeyError:
+                console.print("  (block not in the sibling IR)", style="dim")
+
+
+@app.command()
+def build(
+    source: Annotated[Path, typer.Argument(help="PDF, EPUB, Markdown or text file")],
+    out_dir: Annotated[Path, typer.Option("--out", "-o", help="output directory")] = Path("out"),
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+) -> None:
+    """The whole pipeline: source document to a listenable, checkable programme.
+
+    Stage 6 -- the LLM elaboration layer -- is not wired in yet, so there are no anchors,
+    analogies or figure descriptions. Everything else runs: what you get is the paper, said in
+    a way you can follow, with the questions and the spacing that make it stick.
+    """
+    settings = Settings()
+    profile, listener = _profile_and_listener(profile_name, listener_file, settings)
+
+    try:
+        doc = run_ingest(source)
+    except IngestError as exc:
+        _fail(str(exc))
+        return
+    doc = run_triage(run_clean(doc))
+    _print_diagnostics(doc)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
+    registry = build_registry(doc, listener)
+    (out_dir / "registry.json").write_text(registry.to_json(), encoding="utf-8")
+
+    script = run_plan(doc, registry, profile, listener)
+    (out_dir / "script.json").write_text(script.to_json(), encoding="utf-8")
+    (out_dir / "drop-report.md").write_text(drop_report(doc), encoding="utf-8")
+
+    artefacts = run_render(script)
+    artefacts.write(out_dir)
+    console.print(f"[green]wrote[/] {out_dir}: audio.md, study.md, cards.json, manifest.json")
+    _print_script_summary(script, profile)
+
+    report = run_lint_script(script, artefacts.audio, profile)
+    _report_lint(report)
+    if not report.ok:
+        raise typer.Exit(code=1)
+
+
+def _profile_and_listener(
+    profile_name: str, listener_file: Path | None, settings: Settings
+) -> tuple[Profile, Listener]:
+    try:
+        profile = load_profile(profile_name, settings)
+    except FileNotFoundError as exc:
+        _fail(str(exc))
+        raise
+    return profile, load_listener(listener_file, settings)
+
+
+def _read_script(path: Path) -> Script:
+    try:
+        return Script.from_json(path.read_bytes())
+    except Exception as exc:
+        _fail(f"{path} is not a mimem script: {exc}")
+        raise
+
+
+def _find_script(target: Path) -> Path | None:
+    """The script in a build directory, or the file itself if it is one."""
+    candidate = target / "script.json" if target.is_dir() else target
+    return candidate if candidate.exists() and candidate.suffix == ".json" else None
+
+
+def _script_path(target: Path) -> Path:
+    found = _find_script(target)
+    if found is None:
+        _fail(f"no script at {target}")
+        raise typer.Exit(code=1)  # unreachable; _fail raises
+    return found
+
+
+def _sibling_document(target: Path) -> Document | None:
+    """The IR next to a script, if the build wrote one -- for showing the source of a span."""
+    directory = target if target.is_dir() else target.parent
+    candidate = directory / "doc.ir.json"
+    if not candidate.exists():
+        return None
+    try:
+        return Document.from_json(candidate.read_bytes())
+    except Exception:
+        return None
+
+
+def _load_or_build_registry(
+    doc: Document, registry_file: Path | None, ir: Path, listener: Listener
+) -> ConceptRegistry:
+    candidate = registry_file or ir.with_name(ir.stem.replace(".ir", "") + ".registry.json")
+    if candidate.exists():
+        try:
+            return ConceptRegistry.from_json(candidate.read_bytes())
+        except Exception as exc:
+            console.print(
+                f"[yellow]ignoring unreadable registry[/] {candidate}: {exc}", style="dim"
+            )
+    console.print(f"[dim]no registry at {candidate}; building one[/]")
+    return build_registry(doc, listener)
+
+
+def _print_script_summary(script: Script, profile: Profile) -> None:
+    minutes = script.est_seconds / 60
+    budget = script.budget_seconds / 60
+    prompts = sum(1 for b in script.beats() if b.type.value == "prompt")
+    console.print(
+        f"  {len(script.sections)} sections, {len(script.segments())} segments, "
+        f"{len(script.beats())} beats, {prompts} prompts",
+        style="dim",
+    )
+    console.print(
+        f"  {minutes:.1f} min against a {budget:.1f} min budget at {profile.wpm:.0f} wpm",
+        style="dim",
+    )
+    scheduled = sum(1 for s in script.schedule if s.exposures > 1)
+    console.print(
+        f"  {scheduled} concepts come back at least once; {len(script.cards)} cards",
+        style="dim",
+    )
+    for note in script.notes[:3]:
+        console.print(f"  [yellow]note[/] {note}", style="dim")
+    if script.dropped:
+        console.print(f"  {len(script.dropped)} beats cut to fit the budget", style="dim")
 
 
 def _report_lint(report: LintReport, examples: int = 3) -> None:
@@ -318,8 +567,10 @@ def _report_lint(report: LintReport, examples: int = 3) -> None:
         if seen[v.rule] > examples:
             continue
         colour = "red" if v.severity is Severity.ERROR else "yellow"
-        console.print(f"  [{colour}]{v.rule}[/] line {v.line}: {v.message}", style="dim")
-        console.print(f"      …{v.excerpt}…", style="dim")
+        where = f"line {v.line}" if v.line else (v.beat_id or "script")
+        console.print(f"  [{colour}]{v.rule}[/] {where}: {v.message}", style="dim")
+        if v.excerpt:
+            console.print(f"      …{v.excerpt}…", style="dim")
 
 
 # -- printing helpers --------------------------------------------------------------------

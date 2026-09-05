@@ -243,6 +243,28 @@ def _is_cover_page(blocks: list[Block]) -> bool:
     return not informative
 
 
+#: An abstract's heading is often set run-in with its first sentence, so the block arrives as
+#: "Abstract The accelerating electrification of transport...". On the page the typography marks
+#: it as a label; in speech nothing does, and the listener hears a sentence that starts with a
+#: word nobody said. Sentence offsets are rebuilt because they are byte offsets into this text.
+_RUN_IN_LABEL = re.compile(r"^\s*(abstract|summary)\s*[:.\u2014-]?\s+(?=[A-Z(])", re.I)
+
+
+def _strip_run_in_label(block: Block) -> None:
+    """Remove a run-in "Abstract" label from the start of a block."""
+    stripped = _RUN_IN_LABEL.sub("", block.text, count=1)
+    if stripped == block.text or not stripped.strip():
+        return
+    block.text = stripped
+    if block.sentences:
+        # Sectioning runs before sentence segmentation, so there is nothing to fix today. The
+        # guard is here so that changing that order cannot silently leave every offset in this
+        # block pointing a word to the left.
+        from mimem.clean.sentences import sentence_spans
+
+        block.sentences = sentence_spans(block.text)
+
+
 def _assign_front_matter(doc: Document, front: list[Block]) -> None:
     """Label title / authors / affiliation / abstract / keywords.
 
@@ -283,6 +305,7 @@ def _assign_front_matter(doc: Document, front: list[Block]) -> None:
         elif re.match(r"^\s*(abstract|summary)\b", text, re.I):
             # In the front matter, "Summary" is unambiguously the abstract.
             block.role, in_abstract = BlockRole.ABSTRACT, True
+            _strip_run_in_label(block)
         elif in_abstract:
             block.role = BlockRole.ABSTRACT
         elif _EMAIL.search(text) or _AFFILIATION_HINT.search(text):

@@ -32,6 +32,7 @@ class Violation:
     excerpt: str
     severity: Severity = Severity.ERROR
     line: int | None = None
+    beat_id: str | None = None  # set by the script rules, which have beats rather than lines
 
 
 def _line_of(text: str, index: int) -> int:
@@ -197,12 +198,57 @@ class SentenceLength(LintRule):
         return out
 
 
-#: The M2 rule set, in report order.
+class NoDanglingReferences(LintRule):
+    """STR-08: nothing in the audio track points at something the listener cannot see.
+
+    "As shown in the table below" is not merely useless in audio -- it tells the listener that
+    they have missed something, which is worse than saying nothing at all. The cross-reference
+    stripper in stage 5 removes the citation-shaped ones; this catches the prose-shaped ones it
+    cannot see, and it will catch the first figure description that forgets where it is.
+    """
+
+    id = "STR-08"
+    description = "no references to things the listener cannot access"
+
+    _NOUNS = r"figure|table|equation|panel|plot|graph|chart"
+
+    PATTERNS = (
+        (
+            r"\bsee\s+(?:the\s+)?(?:" + _NOUNS + r"|section|chapter|appendix)\b",
+            "see-reference",
+        ),
+        (r"\b(?:" + _NOUNS + r")s?\s+(?:above|below)\b", "spatial reference"),
+        (
+            r"\bas\s+(?:shown|illustrated|listed|summari[sz]ed|depicted)"
+            r"\s+(?:in|by)\s+the\s+(?:" + _NOUNS + r")\b",
+            "visual reference",
+        ),
+        (
+            r"\bin\s+the\s+(?:previous|preceding|following|next)"
+            r"\s+(?:chapter|section)\b",
+            "unreachable section",
+        ),
+        (r"\b(?:above|below)-mentioned\b", "spatial reference"),
+    )
+
+    def check(self, text: str) -> list[Violation]:
+        out: list[Violation] = []
+        for pattern, label in self.PATTERNS:
+            out.extend(
+                self._violation(text, m.start(), m.end(), label)
+                for m in re.finditer(pattern, text, re.IGNORECASE)
+            )
+        return out
+
+
+#: The text rule set, in report order. These read the narration; the structural rules that read
+#: the plan live in ``script_rules.py``.
 DEFAULT_RULES: tuple[LintRule, ...] = (
     CharacterAllowlist(),
     NoRawNumerals(),
     NoCitations(),
     NoParentheticals(),
     NoVisualOnlyConstructs(),
+    NoDanglingReferences(),
     SentenceLength(),
 )

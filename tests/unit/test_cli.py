@@ -50,6 +50,62 @@ def test_missing_source_fails_cleanly(tmp_path: Path) -> None:
     assert result.exit_code == 1
 
 
-def test_build_is_honest_about_not_being_implemented(paper_pdf: Path) -> None:
-    result = runner.invoke(app, ["build", str(paper_pdf)])
-    assert result.exit_code == 1
+def test_build_runs_the_whole_pipeline(paper_pdf: Path, tmp_path: Path) -> None:
+    """Source document in, listenable programme out, with the lint report as the gate."""
+    out = tmp_path / "programme"
+    result = runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)])
+    assert result.exit_code == 0, result.stdout
+    for name in ("audio.md", "study.md", "cards.json", "manifest.json", "script.json"):
+        assert (out / name).exists(), name
+    assert "min against" in result.stdout
+
+
+def test_build_keeps_the_intermediate_stages_on_disk(paper_pdf: Path, tmp_path: Path) -> None:
+    """Every stage is a file-to-file transform: you can stop, edit, and resume (PLAN section 1)."""
+    out = tmp_path / "programme"
+    runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)])
+    assert (out / "doc.ir.json").exists()
+    assert (out / "registry.json").exists()
+    assert (out / "drop-report.md").exists()
+
+
+def test_plan_then_render_then_lint(paper_pdf: Path, tmp_path: Path) -> None:
+    ir = tmp_path / "paper.ir.json"
+    runner.invoke(app, ["ingest", str(paper_pdf), "-o", str(ir)])
+    script = tmp_path / "paper.script.json"
+
+    assert runner.invoke(app, ["plan", str(ir), "-o", str(script)]).exit_code == 0
+    out = tmp_path / "out"
+    assert runner.invoke(app, ["render", str(script), "-o", str(out)]).exit_code == 0
+    assert runner.invoke(app, ["lint", str(out)]).exit_code == 0
+
+
+def test_explain_traces_a_beat_back_to_its_rule_and_its_source(
+    paper_pdf: Path, tmp_path: Path
+) -> None:
+    """Without this, tuning the system is guesswork (PLAN section 1)."""
+    from mimem.ir import Script
+
+    out = tmp_path / "programme"
+    runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)])
+    script = Script.from_json((out / "script.json").read_bytes())
+    beat = next(b for b in script.beats() if b.type.value == "exposition")
+
+    result = runner.invoke(app, ["explain", str(out), "--beat", beat.id])
+    assert result.exit_code == 0
+    assert "exposition" in result.stdout
+    assert "source" in result.stdout
+
+
+def test_explain_rejects_an_unknown_beat(paper_pdf: Path, tmp_path: Path) -> None:
+    out = tmp_path / "programme"
+    runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)])
+    assert runner.invoke(app, ["explain", str(out), "--beat", "t_nope"]).exit_code == 1
+
+
+def test_lint_on_a_bare_audio_file_says_what_it_cannot_check(tmp_path: Path) -> None:
+    audio = tmp_path / "audio.md"
+    audio.write_text("This is a clean sentence.\n", encoding="utf-8")
+    result = runner.invoke(app, ["lint", str(audio)])
+    assert result.exit_code == 0
+    assert "text rules only" in result.stdout

@@ -43,3 +43,10 @@ jobs:
 
       - name: Test
         run: uv run pytest --cov=mimem --cov-report=term-missing
+
+      # The documentation is part of the product, and a broken cross-reference in it is a
+      # defect like any other. Building on Linux only: the output is identical and this is
+      # about catching bad links, not platform differences.
+      - name: Build the documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: uv run zensical build --clean

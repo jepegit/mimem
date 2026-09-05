@@ -139,9 +139,25 @@ def test_front_matter_is_found_when_the_body_starts_on_page_two() -> None:
     roles = {b.text[:20]: b.role for b in doc.blocks}
     assert roles["Optimization driven "] is BlockRole.TITLE
     assert roles["Anupam Yadav1 · Must"] is BlockRole.AUTHORS
-    assert roles["Abstract The acceler"] is BlockRole.ABSTRACT
+    assert roles["The accelerating ele"] is BlockRole.ABSTRACT
     assert roles["Keywords Lithium-ion"] is BlockRole.KEYWORDS
     assert doc.source.title.startswith("Optimization driven")
+
+
+def test_the_abstracts_run_in_label_is_not_read_out() -> None:
+    """The heading is usually set on the same line as the first sentence, so the block arrives
+    as "Abstract The accelerating...". On the page the typography says that is a label; in
+    audio nothing does, and the listener hears a sentence beginning with a word nobody said."""
+    doc = assign_sections(
+        _paged(
+            ("paragraph", "Optimization driven gradient boosting for battery life", None, 1, 16.0),
+            ("paragraph", "Abstract The accelerating electrification of transport.", None, 1),
+            ("heading", "Introduction", 1, 2),
+            ("paragraph", "Battery degradation matters.", None, 2),
+        )
+    )
+    abstract = next(b for b in doc.blocks if b.role is BlockRole.ABSTRACT)
+    assert abstract.text.startswith("The accelerating")
 
 
 def test_authors_separated_by_middle_dots_are_recognised() -> None:

@@ -119,8 +119,12 @@ own sentence or dropped. *(lint: no `(` in `audio.md` outside allowed constructs
 **SENT-05** Front-load the point. Each paragraph's first sentence states the claim; support follows.
 *(prompt)*
 
-**ORI-01** Every section opens with a one-clause **position statement**: "Section 3 of 7 — the
+**ORI-01** Every section opens with a one-clause **position statement**: "Part three of seven — the
 calibration problem." *(KB §2.3; planner)*
+
+*The example used to read "Section 3 of 7", which is three violations of this document in six
+words: two raw numerals (`NUM-02`), and a reference to a section the listener cannot turn to, which
+the stage 5 cross-reference stripper duly deleted (`STR-08`). Scaffolding is speech.*
 
 **ORI-02** After any beat longer than ~90 s, re-anchor with a short "where we are" clause.
 *(planner)*
@@ -215,6 +219,15 @@ fallback, not the default. *(KB §1.1; planner)*
 **SPC-01** Repeats of the same concept are spaced at **increasing intervals measured in estimated
 narration minutes**, with a minimum gap of 3 minutes between exposures of the same concept.
 *(KB §1.2; lint on the exposure log)*
+
+*How it is enforced (added in M4, when it turned out to be unenforceable as written).* An
+**exposure** is a deliberate encounter — the first explanation, a callback, a prompt, a recap, a
+review item — not every mention: a paper names its subject in most paragraphs. Exposures inside one
+section that fall closer than the gap are **one episode**, because `STR-06` puts a recap and a
+question at the end of every section and a two-minute section cannot hold them three minutes apart.
+The gap is an **error** when the later exposure is a callback, which the spacing scheduler placed
+and could have placed elsewhere, and a **warning** when both were placed by the structure rules,
+which had no other option. See `src/mimem/plan/exposure.py`.
 
 **SPC-02** Default within-document schedule: end of own segment → end of section → end of chapter →
 final review. Intervals are approximately geometric (ratio ~2.5), truncated to fit the document.
@@ -405,6 +418,11 @@ how to fix it.
 **TTS-02** Prosody is controlled through **sentence length, punctuation and explicit break markers
 only**. No reliance on `<prosody>`, `<emphasis>` or `<say-as>`, which mainstream neural engines
 ignore or mishandle. *(KB §2.5)*
+
+*Break markers live in `manifest.json`, one `pause_after` per chunk, not in `audio.md` — inside the
+audio track they would be either unspeakable characters (`TTS-01`) or words the engine reads aloud.
+Retrieval pauses additionally carry a **spoken** cue ("take a few seconds"), so that an engine which
+ignores break markers still leaves the listener in no doubt that thinking time is expected.*
 
 **TTS-03** The script is emitted as **stable, content-addressed chunks** so that audio can be
 re-rendered incrementally when one beat changes. *(planner)*

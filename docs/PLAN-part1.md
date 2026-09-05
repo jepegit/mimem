@@ -590,9 +590,73 @@ falls away, and on the AI review it is "artificial intelligence", "battery manag
 - A term named after one of the paper's own authors would be filtered out. Rare, and the registry
   is editable when it happens.
 
-**M4 — planner and renderer, no LLM (1.5 weeks).** Beats, segmentation, spacing scheduler, retrieval
-placement using template-generated prompts, `audio.md` / `study.md` / `cards.json` / `manifest.json`.
-*Done when:* the spacing and structure lint rules pass on all fixtures and the property tests hold.
+**M4 — planner and renderer, no LLM — done (2026-09-05).** Beats, segmentation, the spacing
+scheduler, template-generated retrieval, and the four artefacts. *Done when:* the spacing and
+structure lint rules pass on all fixtures and the property tests hold. Both do: 301 tests, of
+which 13 are pass/fail fixture pairs for the structural rules and 8 are hypothesis properties
+over the scheduler. `mimem build paper.pdf --out ./out/paper` now runs the whole deterministic
+pipeline; `mimem plan`, `mimem render` and `mimem explain` expose the stages individually.
+
+On the three real papers, all lint-clean:
+
+| paper | programme | sections | prompts | concepts brought back |
+|---|---|---|---|---|
+| GBDT degradation | 84 min of a 90 min budget | 21 | 68 | 38 |
+| BYD teardown | 52 min of a 60 min budget | 2 | 33 | 16 |
+| AI for reuse | 113 min of a 119 min budget | 30 | 93 | 52 |
+
+*Design notes and deviations:*
+
+- **A pause is a field, not a beat.** The plan sketched a `pause` beat type. An empty-text beat
+  needs a special case in every renderer, in the duration arithmetic and in `GRD-01`, for
+  something with no text, no provenance and no concept. `Beat.pause_after` instead, and `PAU-01`
+  is checked on the beat the pause belongs to.
+- **Pauses live in `manifest.json`, not in `audio.md`.** A break marker in the audio track is
+  either unspeakable characters (`TTS-01`) or words the engine reads out. The durations go in the
+  chunk list, where the engine adapter (`TTS-05`) can render them; what the *listener* gets is the
+  spoken cue — "take a few seconds" — which works even on an engine that ignores breaks.
+- **Every repeat is a different sentence of the source.** A template cannot paraphrase, so an
+  unavoidably verbatim repeat would be `REP-01` dressed up as a feature. Instead each exposure
+  draws a sentence the listener has not heard yet, and when a concept runs out of them the
+  callback is not emitted at all — a beat saying "keep this in mind" carries no claim, no span
+  and no information.
+- **The lint fixtures are mutations, not files.** The plan asked for a passing and a failing
+  example per rule in `tests/fixtures/lint/`. They are in `tests/unit/test_script_lint.py`
+  instead, as thirteen named mutations of a real plan — "delete the answer beat", "give two
+  concepts the same anchor". A mutation says what the rule is *about* and cannot drift out of
+  date as the script model changes.
+- **Scaffolding goes through the verbalizers.** `ORI-01`'s own example — "Section 3 of 7" — is
+  two lint errors as written, and the cross-reference stripper deletes "Section 3" because
+  `STR-08` says so. Position statements say "Part three of seven".
+
+*What the first real build changed, in order:*
+
+1. The duration budget was measured on the raw source text, but the programme speaks the
+   *verbalized* text: "0.05 V" is two words on the page and seven aloud. The budget was
+   systematically too small, so it cut things nobody asked it to cut — including every recap
+   `STR-06` requires. Recaps are no longer in the `DUR-02` drop order at all.
+2. Sections were sized before the recap, the prompt and the callbacks were added to them, so
+   segments shipped over the hard maximum. They are re-split at the end, never between a prompt
+   and its answer.
+3. A section's closing question was sometimes about a concept from two sections back, landing
+   inside the minimum spacing gap. It now prefers a concept the section introduced, and when it
+   must reach back, reaches for the one met longest ago.
+4. `prompts_per_segment` was a dead knob. A paper whose headings the extractor barely finds
+   became a forty-minute programme with four questions in it, which is most of the way back to
+   the audiobook problem.
+
+*Known limitations:*
+
+- **Spacing versus structure, on short sections.** `STR-06` puts a question at the end of every
+  section; `SPC-01` wants three minutes between exposures. A two-minute section cannot have
+  both. Exposures inside one section coalesce into a single episode, and a close pair the
+  *structure* rules placed is reported as a warning rather than an error — an error is reserved
+  for a callback, which is a placement the scheduler chose and could have made differently.
+- **Sections follow the headings ingestion found.** The teardown paper yields two, so its
+  thirty-two segments sit under two position statements. That is an M1 limitation showing
+  through, not a planner one.
+- **`SENT-01` and the acronym warnings remain.** Long sentences are split only at semicolons;
+  real splitting is a rewriting task and belongs to M5.
 
 **M5 — LLM elaboration layer (2 weeks).** Task framework, caching, batch, structured outputs,
 document-citation provenance, groundedness verification, figure descriptions. *Done when:* the

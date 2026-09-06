@@ -331,3 +331,61 @@ def test_the_elaborated_programme_lints_clean(elaborated, drill: Profile) -> Non
     assert report.ok, (
         report.summary() + "\n" + "\n".join(f"{v.rule}: {v.message}" for v in report.errors[:10])
     )
+
+
+# -- the gate on schemas it was not written for -------------------------------------------------
+
+
+def test_the_gate_covers_a_schema_with_no_text_field() -> None:
+    """The gate used to read a field called ``text`` and check the empty string when there was
+    none. ``FigureOut`` has six fields and none of them is ``text``, so figure descriptions --
+    the highest-hallucination-risk output in the system -- were the one output nothing checked.
+
+    A pie-chart description claiming hydrogen "climbs from 12.4 percent to 51.8 percent", both
+    numbers invented, passed the gate cleanly.
+    """
+    from mimem.elaborate.run import ground
+    from mimem.llm.schemas import FigureOut
+
+    invented = FigureOut(
+        statement="Hydrogen rises across the samples",
+        kind="four pie charts",
+        axes="share of total gas volume as a percentage",
+        trend="Hydrogen climbs from 12.4 percent in the first sample to 51.8 percent in the last.",
+        exceptions="None.",
+        claim="Hydrogen share increases with nickel content.",
+        confidence=0.9,
+    )
+    findings = ground(invented, "Gas production composition and volume percentage of four samples.")
+    assert {f.value for f in findings} == {"12.4", "51.8"}
+
+
+def test_a_figure_description_may_not_quote_a_value_the_paper_never_wrote() -> None:
+    """The rule that falls out of the gate, rather than one imposed on it.
+
+    Numbers read off a plot are in the *image*, and a text gate cannot tell them from invented
+    ones -- so it rejects a correct description and a fabricated one alike. That is not a gate
+    failure, it is the specification: a figure description says "well over half", and the exact
+    value stays in study.md and on the crop, where a reader can check it against the picture.
+    """
+    from mimem.elaborate.run import ground
+    from mimem.llm.schemas import FigureOut
+
+    source = "Gas production composition and volume percentage of four samples."
+    common = {
+        "statement": "Gas composition differs sharply between the four chemistries",
+        "kind": "four pie charts, one per sample",
+        "axes": "share of total gas volume as a percentage",
+        "exceptions": "The fourth sample's largest share belongs to a different gas.",
+        "claim": "Composition is a fingerprint of the chemistry.",
+        "confidence": 0.8,
+    }
+    read_off_the_plot = FigureOut(
+        trend="One gas takes 60.27 percent of the third sample.", **common
+    )
+    qualitative = FigureOut(
+        trend="One gas takes well over half of the third sample on its own.", **common
+    )
+
+    assert ground(read_off_the_plot, source), "a value only the image states is not verifiable"
+    assert ground(qualitative, source) == []

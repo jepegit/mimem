@@ -179,19 +179,34 @@ there are no spans, and the image is not something `check()` can read.
 
 Four layers, weakest to strongest:
 
-1. **Numbers and directions against caption plus references.** The existing `ground()`, unchanged.
-   It catches an invented value and a reversed trend whenever the text states either. It cannot
-   catch "the line rises" when nothing in the text says which way it goes, and it should not
-   pretend to.
-2. **Confidence degrades to caption-only.** Already designed as `FIG-07`, already a required
+1. **Numbers and directions against caption plus references.** The existing `ground()` — which,
+   when it was actually run against a `FigureOut`, turned out **not to cover figure descriptions
+   at all**. `_claim_text` read a field called `text`; `FigureOut` has six fields and none of
+   them is `text`; so the gate checked the empty string and reported "accepted". A pie-chart
+   description claiming hydrogen "climbs from 12.4 percent to 51.8 percent", both invented,
+   passed cleanly. The fallback now reads every string field, so an unfamiliar schema fails
+   closed.
+
+2. **A figure description may not quote a value the paper never wrote in a sentence.** This is
+   the rule the gate produced rather than one imposed on it. Running a *faithful* description
+   through it — with percentages read correctly off the plot — rejects it too, and rightly:
+   those numbers are in the image, and from the text's point of view they are indistinguishable
+   from fabricated ones. A gate that rejects every accurate description would be unusable, so
+   the answer is not to weaken the gate but to say what a description may contain: "well over
+   half", not "60.27 percent". Quoting the paper's own stated values is fine and passes.
+
+   This costs nothing a listener had. Audio cannot carry a four-decimal percentage anyway — that
+   is what `NUM-01`'s chunking exists for — and the exact values are in `study.md` and on the
+   crop, where a reader can check them against the picture rather than take them on trust.
+3. **Confidence degrades to caption-only.** Already designed as `FIG-07`, already a required
    schema field. A description written from the caption alone should say so and then not be
    spoken as fact.
-3. **No card may take its answer from a figure description.** This is the rule I would not ship
+4. **No card may take its answer from a figure description.** This is the rule I would not ship
    without. A wrong description spoken once is a wrong sentence. A wrong description turned into
    a spaced-repetition card is a wrong fact rehearsed at expanding intervals — mimem using the
    largest effect in the learning literature to teach an error. The cost of the rule is a few
    cards; the cost of not having it is the worst failure the system can produce.
-4. **Attribution without hedging.** The description is the *paper's* data, not our analogy, so
+5. **Attribution without hedging.** The description is the *paper's* data, not our analogy, so
    `VOI-02`-style ownership marking would be wrong — it would file a correct description as a
    guess. "The figure shows…" is the right voice: it attributes the claim to the figure, which
    is where a listener can go and check it.

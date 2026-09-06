@@ -355,8 +355,29 @@ def ground(
     ]
 
 
+#: Fields that carry no claim, and so are not checked against the source. ``spoken`` is a
+#: pronunciation; ``evidence`` and ``note`` are the verifier talking *about* a claim rather than
+#: making one.
+_NOT_A_CLAIM = frozenset({"spoken", "evidence", "note"})
+
+
 def _claim_text(data: BaseModel) -> str:
-    """Everything in a task's output that asserts something, for the grounding check."""
+    """Everything in a task's output that asserts something, for the grounding check.
+
+    The fallback reads every string field rather than looking for one called ``text``, and that
+    is the whole point of it. The old fallback returned ``getattr(data, "text", "")``, so a
+    schema without a ``text`` field was checked against the empty string and passed — silently,
+    and reported as "accepted". ``FigureOut`` has six fields and none of them is called ``text``,
+    which meant the grounding gate did not cover figure descriptions at all: the output with the
+    highest hallucination risk in the system was the one output nothing was checking.
+
+    A description of a pie chart claiming hydrogen "climbs from 12.4 percent to 51.8 percent",
+    with both numbers invented, passed cleanly. Now it does not.
+
+    So an unknown schema now fails *closed*: every string it carries is treated as a claim.
+    Over-checking costs a false positive that somebody reads; under-checking costs a fabricated
+    number nobody hears about.
+    """
     if isinstance(data, GlossOut):
         return f"{data.short_def} {data.long_def}"
     if isinstance(data, AnchorOut):
@@ -365,7 +386,11 @@ def _claim_text(data: BaseModel) -> str:
         return f"{data.text} {data.limit}"
     if isinstance(data, WhyOut):
         return data.text
-    return str(getattr(data, "text", ""))
+    return " ".join(
+        value
+        for name, value in data
+        if name not in _NOT_A_CLAIM and isinstance(value, str) and value
+    )
 
 
 # -- applying the results ----------------------------------------------------------------------

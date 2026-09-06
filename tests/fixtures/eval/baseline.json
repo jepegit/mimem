@@ -1,0 +1,48 @@
+{
+  "documents": [
+    {
+      "document": "synthetic-paper.pdf",
+      "lint_errors": 0,
+      "lint_warnings": 4,
+      "rules_checked": 29,
+      "rules_skipped": 0,
+      "minutes": 7.6,
+      "budget_minutes": 10.0,
+      "budget_used": 0.76,
+      "sections": 3,
+      "segments": 4,
+      "beats": 41,
+      "cards": 3,
+      "gloss_coverage": 0.0,
+      "concepts_spaced": 0.0,
+      "intervals_expanding": 1.0,
+      "median_gap_minutes": 0.0,
+      "grounded": 1.0,
+      "values_kept": 1.0,
+      "words_retained": 0.828,
+      "prompts_per_minute": 0.79
+    },
+    {
+      "document": "synthetic-sensor-paper.md",
+      "lint_errors": 0,
+      "lint_warnings": 26,
+      "rules_checked": 29,
+      "rules_skipped": 0,
+      "minutes": 19.5,
+      "budget_minutes": 19.52,
+      "budget_used": 0.999,
+      "sections": 6,
+      "segments": 12,
+      "beats": 91,
+      "cards": 10,
+      "gloss_coverage": 0.0,
+      "concepts_spaced": 0.545,
+      "intervals_expanding": 0.5,
+      "median_gap_minutes": 6.28,
+      "grounded": 1.0,
+      "values_kept": 1.0,
+      "words_retained": 0.89,
+      "prompts_per_minute": 0.821
+    }
+  ]
+}

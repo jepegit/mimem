@@ -21,7 +21,6 @@ import pytest
 
 from mimem.config import Profile
 from mimem.ir import Analogy, Anchor, Beat, BeatType, Script, Span, beat_id
-from mimem.lint.rules import Severity
 from mimem.lint.script_rules import ScriptRule, script_rules
 
 Mutator = Callable[[Script], None]
@@ -31,8 +30,15 @@ def _rule(rule_id: str, profile: Profile) -> ScriptRule:
     return next(r for r in script_rules(profile) if r.id == rule_id)
 
 
-def _errors(rule: ScriptRule, script: Script) -> list[str]:
-    return [v.message for v in rule.check(script) if v.severity is Severity.ERROR]
+def _fired(rule: ScriptRule, script: Script) -> list[str]:
+    """What the rule reports at its *own* severity.
+
+    Not simply "every violation": ``SEG-01`` is an error rule that also emits warnings for a
+    segment merely off target, and the clean plan has three of those. Filtering to the rule's
+    declared severity asks the question each case is actually about -- did this rule report the
+    thing it exists to report -- and keeps one table for the error rules and the warning rules.
+    """
+    return [v.message for v in rule.check(script) if v.severity is rule.severity]
 
 
 # -- the mutations ----------------------------------------------------------------------------
@@ -222,6 +228,72 @@ def _split_a_sentence(script: Script) -> None:
     beat.text = beat.text.rstrip(".?!") + " and then"
 
 
+def _open_with_a_pronoun(script: Script) -> None:
+    """SENT-02: a beat that begins by pointing at something in the previous one."""
+    beat = next(b for b in script.beats() if b.type is BeatType.EXPOSITION)
+    beat.text = "This means the layer keeps growing. " + beat.text
+
+
+def _insert(script: Script, beat: Beat) -> None:
+    script.sections[0].segments[0].beats.append(beat)
+
+
+def _add_a_table(script: Script) -> None:
+    """A compliant table beat: the caption first, then whatever the values are.
+
+    The planner emits an honest placeholder for a table today, so without this the pass
+    direction of ``TBL-02`` would be a rule looking at nothing.
+    """
+    _insert(
+        script,
+        Beat(
+            id=beat_id(BeatType.TABLE, "capacity table", "fixture"),
+            type=BeatType.TABLE,
+            text=(
+                "Here's a table of capacity retention at four temperatures. "
+                "At twenty five degrees it is ninety four percent."
+            ),
+            spans=[Span(block_id="b_table")],
+            est_seconds=12.0,
+        ),
+    )
+
+
+def _table_leads_with_a_value(script: Script) -> None:
+    """TBL-02: values before the listener knows what they are values of."""
+    beat = _first(script, BeatType.TABLE)
+    beat.text = "Ninety four percent at twenty five degrees. This is capacity retention."
+
+
+def _add_a_figure(script: Script) -> None:
+    """A compliant figure description: title, kind, axes, trend, exception, claim."""
+    _insert(
+        script,
+        Beat(
+            id=beat_id(BeatType.FIGURE, "capacity figure", "fixture"),
+            type=BeatType.FIGURE,
+            text=(
+                "Capacity fade tracks interphase thickness. "
+                "It's a scatter plot, with interphase thickness on the horizontal axis and "
+                "capacity loss on the vertical. The points rise together almost in a line, "
+                "except for two cells that fell well below it. "
+                "That's the evidence for the claim that repair, not fracture, sets the pace."
+            ),
+            spans=[Span(block_id="b_figure")],
+            est_seconds=20.0,
+        ),
+    )
+
+
+def _figure_without_its_kind(script: Script) -> None:
+    """FIG-01: a description that never says what shape of thing to picture."""
+    beat = _first(script, BeatType.FIGURE)
+    beat.text = (
+        "Capacity fade tracks interphase thickness. "
+        "The values rise together, except for two cells that fell below."
+    )
+
+
 CASES: list[tuple[str, Mutator]] = [
     ("STR-02", _break_prequestions),
     ("STR-06", _remove_recaps),
@@ -239,15 +311,28 @@ CASES: list[tuple[str, Mutator]] = [
     ("PAU-02", _anchor_without_a_pause),
     ("GRD-03", _invented_number),
     ("TTS-04", _split_a_sentence),
+    ("SENT-02", _open_with_a_pronoun),
+    ("TBL-02", _table_leads_with_a_value),
+    ("FIG-01", _figure_without_its_kind),
 ]
 IDS = [case[0] for case in CASES]
+
+#: Some rules govern beats the planner cannot yet write. A figure *description* needs a vision
+#: model, and until there is one the planner emits an honest announcement that ``FIG-01``
+#: deliberately exempts -- so both directions of those cases would be a rule looking at an empty
+#: script. These build the compliant beat first, on the clean plan and the broken one alike, so
+#: that passing means the rule read something and approved of it.
+PREPARE: dict[str, Mutator] = {"TBL-02": _add_a_table, "FIG-01": _add_a_figure}
 
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)
 def test_the_clean_plan_passes(
     rule_id: str, mutate: Mutator, elaborated_script: Script, study_profile: Profile
 ) -> None:
-    assert _errors(_rule(rule_id, study_profile), elaborated_script) == []
+    clean = elaborated_script.model_copy(deep=True)
+    if prepare := PREPARE.get(rule_id):
+        prepare(clean)
+    assert _fired(_rule(rule_id, study_profile), clean) == []
 
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)
@@ -255,8 +340,10 @@ def test_the_broken_plan_fails(
     rule_id: str, mutate: Mutator, elaborated_script: Script, study_profile: Profile
 ) -> None:
     broken = elaborated_script.model_copy(deep=True)
+    if prepare := PREPARE.get(rule_id):
+        prepare(broken)
     mutate(broken)
-    assert _errors(_rule(rule_id, study_profile), broken), f"{rule_id} did not notice"
+    assert _fired(_rule(rule_id, study_profile), broken), f"{rule_id} did not notice"
 
 
 def test_every_rule_has_a_fixture_pair(study_profile: Profile) -> None:

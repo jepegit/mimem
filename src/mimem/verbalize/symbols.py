@@ -42,6 +42,13 @@ OPERATORS = {
 #: for "Börner" -- degraded either way, but at least speakable.
 DROP_CHARS = '§¶†‡•▪◦※★☆©®™|¦^_`{}[]()<>\\/*#$€£¥"¨˜´'
 
+#: Subscripted and superscripted symbols, written the way a source that kept its markup writes
+#: them: ``f_0``, ``C_rate``, ``x^2``. Dropping the marker leaves the index stranded as a bare
+#: token -- "f 0" -- which reads as a digit to the number rules and reached the audio track of a
+#: Markdown source as exactly that. Rewritten before the numbers run, so that the index is
+#: verbalized like any other number and a listener hears "f sub zero".
+SUB_SUPER_RE = re.compile(r"\b([A-Za-z][A-Za-z]{0,3})([_^])\{?([A-Za-z0-9]{1,6})\}?")
+
 #: Written-only abbreviations. Expanded rather than dropped, because they do carry meaning.
 ABBREVIATIONS = {
     r"\be\.\s?g\.(?=\s|,|$)": "for example",
@@ -81,6 +88,14 @@ def apply_lexicon(text: str, lexicon: dict[str, str]) -> str:
     for term in sorted(lexicon, key=len, reverse=True):
         text = re.sub(rf"(?<!\w){re.escape(term)}(?!\w)", lexicon[term], text)
     return text
+
+
+def verbalize_indices(text: str) -> str:
+    """Rule SYM-01: say a subscript, do not drop its marker and strand the index."""
+    return SUB_SUPER_RE.sub(
+        lambda m: f"{m.group(1)} {'sub' if m.group(2) == '_' else 'to the power'} {m.group(3)}",
+        text,
+    )
 
 
 def verbalize_symbols(text: str, *, lexicon: dict[str, str] | None = None) -> str:

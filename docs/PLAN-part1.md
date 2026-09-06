@@ -734,9 +734,40 @@ mimem build paper.pdf --llm --budget 3.00   # and a hard cap
   `COH-02` blocks through the first or run the second as a build gate. The deterministic half of
   `GRD-03` runs on every elaboration today.
 
-**M6 — lint suite complete + eval harness (1 week).** All rules from §10 of the design rules, plus
-the metrics in §8 below. *Done when:* `mimem lint` is wired into CI and a regression in any generator
-fails the build.
+**M6 — lint suite complete + eval harness (1 week). Done.** All twenty-eight rules from §10 of the
+design rules, plus the layer-1 metrics in §8 below, held against a committed baseline by
+`mimem eval` on every pull request.
+
+Four deviations, all of them things the work turned up rather than choices made in advance:
+
+- **A third rule family.** `COH-01`, `MTH-04` and `NUM-06` are statements about the *difference*
+  between two artefacts, not about either one, so they read a `Bundle` (script, document, audio,
+  study) rather than a script. A caller that has only a script cannot run them, and
+  `LintReport.skipped` now says which rules a report did not cover — a report that silently
+  counted fewer rules and still said "clean" was the alternative, and it is worse.
+- **`MTH-04` required changing the renderer, not just checking it.** "Every equation is in
+  `study.md`, retained or dropped" was simply not true: equations triage dropped never reached
+  the written track at all. `render_study` now takes the document and appends the ones the
+  programme did not speak.
+- **The corpus needed a document that exercises the design.** The only fixture was 575 words and
+  produced *zero* concepts, so spacing, pre-loads and callbacks — most of what the system is —
+  were unmeasured by anything CI ran. `tests/fixtures/docs/synthetic-sensor-paper.md` is written
+  to have recurring terms, equations, a table, a figure and back matter. Supporting it meant
+  teaching the Markdown adapter to recognise equations, tables and figures instead of flattening
+  them into prose, which was itself the bug that made three rules unfalsifiable on Markdown.
+- **`SENT-02` and `FIG-01` are warnings, not errors.** Both catch things the system cannot yet
+  fix: the anaphora is in the paper's own quoted prose and there is no rewriting stage, and a
+  compliant figure description needs a vision model. Failing a build on either would teach
+  contributors to pass `--no-lint`, which is the worst outcome available.
+
+Writing the six missing rules found four defects that everything else had passed: a
+competing-interests sentence and a keyword list narrated aloud (triage patterns anchored at `^`,
+defeated by the `Conflicts of Interest:` label publishers put in front), `$f_0$` reaching the
+audio track as a bare digit (the `_` was dropped before the number rules ran, stranding the
+index), and the missing equations above.
+
+*Not done:* layers 2 and 3 of §8. `gloss_coverage` sits at zero on every local build, because
+without stage 6 no term is ever defined — a real gap, now visible as a number.
 
 **M7 — TTS handoff (0.5 week).** Chunked output with stable IDs, an ElevenLabs-shaped adapter and a
 local-engine adapter (Piper/Kokoro) for cheap iteration, break-marker rendering. *Done when:* one

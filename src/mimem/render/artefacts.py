@@ -27,7 +27,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from mimem.ir import Beat, BeatType, Script, text_sha256
+from mimem.ir import Beat, BeatType, BlockKind, Document, Script, text_sha256
 
 #: Beat types whose text is ours rather than the source's, marked in study.md so a reader can
 #: always tell (rule VOI-02).
@@ -69,11 +69,15 @@ class Artefacts:
         return written
 
 
-def render(script: Script) -> Artefacts:
-    """Render every artefact from one script."""
+def render(script: Script, doc: Document | None = None) -> Artefacts:
+    """Render every artefact from one script.
+
+    ``doc`` is optional and only ``study.md`` uses it, for the one thing the written track owes
+    the reader that the script does not contain: the equations nobody narrated (rule MTH-04).
+    """
     return Artefacts(
         audio=render_audio(script),
-        study=render_study(script),
+        study=render_study(script, doc),
         cards=render_cards(script),
         manifest=render_manifest(script),
     )
@@ -91,7 +95,7 @@ def render_audio(script: Script) -> str:
 # -- study ---------------------------------------------------------------------------------
 
 
-def render_study(script: Script) -> str:
+def render_study(script: Script, doc: Document | None = None) -> str:
     """The written companion: the source, its locators, and what the audio track dropped."""
     out: list[str] = [f"# {script.source.title or 'Untitled'}\n"]
     if script.source.authors:
@@ -127,7 +131,37 @@ def render_study(script: Script) -> str:
     if script.notes:
         out.append("\n## Notes from the planner\n")
         out.extend(f"- {note}" for note in script.notes)
+
+    out.extend(_equation_appendix(script, doc, "\n".join(out)))
     return "\n".join(out).strip() + "\n"
+
+
+def _equation_appendix(script: Script, doc: Document | None, sofar: str) -> list[str]:
+    """Rule MTH-04: every equation reaches the written track, narrated or not.
+
+    An equation that lost the budget vote is still the shortest true statement of what a section
+    is about, and speech was never going to carry it. Listing the ones the programme did not
+    speak costs a line each and is the difference between "compressed" and "lost".
+    """
+    if doc is None:
+        return []
+    written = " ".join(sofar.split())
+    missing = [
+        block
+        for block in doc.by_kind(BlockKind.EQUATION)
+        if block.text.strip() and " ".join(block.text.split()) not in written
+    ]
+    if not missing:
+        return []
+    out = [
+        "\n## Equations not in the programme\n",
+        "Kept here because an equation is the most compressed form of the thing it states, "
+        "and speech cannot carry one (rule MTH-04).\n",
+    ]
+    for block in missing:
+        page = f"  <sub>p{block.page}</sub>" if block.page else ""
+        out.append(f"- `{' '.join(block.text.split())}`{page}")
+    return out
 
 
 def _study_beat(beat: Beat) -> str:

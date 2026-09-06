@@ -30,7 +30,7 @@ from mimem.verbalize.numbers import (
     verbalize_numbers,
 )
 from mimem.verbalize.parens import verbalize_parentheticals
-from mimem.verbalize.symbols import apply_lexicon, verbalize_symbols
+from mimem.verbalize.symbols import apply_lexicon, verbalize_indices, verbalize_symbols
 from mimem.verbalize.units import is_unit, spoken_unit
 
 __all__ = [
@@ -45,6 +45,7 @@ __all__ = [
     "strip_identifiers",
     "verbalize_block",
     "verbalize_citations",
+    "verbalize_indices",
     "verbalize_numbers",
     "verbalize_parentheticals",
     "verbalize_symbols",
@@ -83,6 +84,7 @@ def verbalize_text(
         text, verbosity=profile.citations, strip_superscripts=strip_superscripts
     )
     text = verbalize_parentheticals(text)
+    text = verbalize_indices(text)
     text = verbalize_numbers(
         text,
         fidelity=profile.numeric_fidelity,

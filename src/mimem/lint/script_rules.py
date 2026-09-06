@@ -566,6 +566,197 @@ class ChunksAlignWithSentences(ScriptRule):
         ]
 
 
+class AnaphoraResolvesAcrossBeats(ScriptRule):
+    """SENT-02: no unresolved pronoun at the start of a beat.
+
+    Mid-paragraph, "it" is free: the antecedent is a line up and the reader's eye has not left
+    it. A beat boundary is not a paragraph break -- it is a *chunk* boundary, and between two
+    beats there may be a pause, a question, a retrieval attempt, or eleven minutes and another
+    section. A beat that opens with "This means the layer keeps growing" is asking the listener
+    to hold a referent across all of that, and the referent is the one thing they were not
+    rehearsing.
+
+    Only the opening of a beat is checked, and only pronouns in subject position. Everything
+    further in has its antecedent inside the same breath, which is what ``SENT-02`` allows.
+
+    Only the source's own sentences are checked. Our scaffolding says "that was one of the
+    questions I asked at the start" and means the discourse, not a noun -- discourse deixis,
+    which is how people actually talk and which points at something the listener heard four
+    seconds ago on purpose. Nominal anaphora is the failure: a pronoun standing in for a noun
+    phrase that a chunk boundary has since carried away.
+
+    A warning, not an error, and deliberately so: these sentences are the *paper's*, quoted, and
+    mimem has no rewriting stage that could fix one. Making it an error would fail every real
+    document on a defect the system cannot yet repair -- which teaches a contributor to pass
+    ``--no-lint``, the worst outcome available. It becomes an error when there is a rewriter to
+    hold responsible.
+    """
+
+    id = "SENT-02"
+    description = "no beat opens with a pronoun whose antecedent is in another beat"
+    severity = Severity.WARNING
+
+    #: Bare pronouns and demonstratives. A demonstrative followed by a noun ("this crust") is
+    #: resolved by the noun and is not matched -- see ``_BARE`` below.
+    _PRONOUNS = r"it|this|that|these|those|they|them|such"
+
+    #: "It is worth noting", "it turns out", "there is no" -- the subject is grammatical filler
+    #: and points at nothing, so there is nothing for the listener to have lost.
+    EXPLETIVE = re.compile(
+        r"^it\s+(?:is|was|turns\s+out|follows|remains|seems|appears|takes|helps|matters)\b",
+        re.IGNORECASE,
+    )
+
+    #: A demonstrative counts as unresolved only when nothing follows it that could be the
+    #: referent: "this is why" (bare) fails, "this repair" (determiner) passes.
+    BARE = re.compile(
+        r"^(?:" + _PRONOUNS + r")\s+(?:is|are|was|were|means|meant|gives|gave|shows|showed|gets|"
+        r"got|gets|makes|made|gains|has|have|had|gets|gives|does|do|did|can|could|will|would|"
+        r"gets|happens|explains|gets|becomes|became|comes|came|goes|went|stays|stayed|leaves|"
+        r"left|costs|cost|matters|mattered|then|also|too|in|on|at|by|for|with|and|but|so)\b",
+        re.IGNORECASE,
+    )
+
+    #: These two never resolve out loud whatever follows them, so they are matched on their own.
+    ALWAYS = re.compile(r"^the\s+(?:former|latter|above|aforementioned)\b", re.IGNORECASE)
+
+    def check(self, script: Script) -> list[Violation]:
+        out: list[Violation] = []
+        for beat in script.beats():
+            opening = beat.text.strip()
+            if not opening or beat.generated:
+                continue
+            if self.EXPLETIVE.match(opening):
+                continue
+            match = self.ALWAYS.match(opening) or self.BARE.match(opening)
+            if match:
+                out.append(
+                    self._violation(
+                        f"beat opens with {match.group(0).split()[0].lower()!r}; "
+                        "say the referent instead",
+                        beat.text,
+                        beat.id,
+                    )
+                )
+        return out
+
+
+class TableCaptionComesFirst(ScriptRule):
+    """TBL-02: a table says what it is before it says what is in it.
+
+    The listener cannot see that a list of values is coming, and cannot skim past it. Told
+    first -- "this is a table of cell capacities at four temperatures" -- they can choose to
+    stop attending, which is a *feature*: a listener who disengages knowingly comes back, and
+    one who is ambushed by numbers loses the thread and does not.
+    """
+
+    id = "TBL-02"
+    description = "a table beat opens by saying it is a table"
+
+    #: Asked as a positive requirement rather than as a ban on numerals in the first sentence.
+    #: The first draft banned them, and failed the caption "a table of capacity retention at
+    #: four temperatures" -- where "four" counts the columns and is exactly the kind of thing a
+    #: caption is *for*. What the listener needs is not the absence of a number, it is the
+    #: presence of a frame, so that is what gets checked.
+    ANNOUNCES = re.compile(
+        r"\b(?:table|these (?:values|numbers|figures)|the (?:values|numbers|rows)|"
+        r"row by row|column)\b",
+        re.IGNORECASE,
+    )
+
+    def check(self, script: Script) -> list[Violation]:
+        out: list[Violation] = []
+        for beat in script.beats():
+            if beat.type is not BeatType.TABLE or not beat.text.strip():
+                continue
+            first = _first_sentence(beat.text)
+            if not self.ANNOUNCES.search(first):
+                out.append(
+                    self._violation(
+                        "table beat does not say it is a table before it says what is in it",
+                        first,
+                        beat.id,
+                    )
+                )
+        return out
+
+
+class FigureDescriptionFollowsTemplate(ScriptRule):
+    """FIG-01: a figure description in the order a listener can build a picture from.
+
+    Title-like statement, then what kind of figure, then axes and units, then the trend, then
+    the exceptions, then the claim it supports (knowledge base 5.4). The order is not
+    decoration: naming the kind before the axes tells the listener what shape of thing to hold
+    the numbers in, and giving the claim last means they hear the evidence before the
+    conclusion rather than filing the conclusion and stopping.
+
+    mimem cannot yet *write* one of these -- that needs a vision model, and until it has one the
+    planner emits an honest announcement instead ("there is a figure here, it is in the written
+    notes"). So this rule checks descriptions and lets announcements through: a rule that failed
+    the honest placeholder would be a rule against admitting what the system cannot do.
+    """
+
+    id = "FIG-01"
+    description = "figure descriptions follow the accessibility template"
+    severity = Severity.WARNING
+
+    #: An announcement, not a description. Matched so it can be exempted.
+    ANNOUNCEMENT = re.compile(
+        r"\b(?:in the written notes|not described here|see the written|there'?s a figure|"
+        r"there is a figure)\b",
+        re.IGNORECASE,
+    )
+
+    #: FIG-01's second element: what kind of figure this is.
+    KINDS = re.compile(
+        r"\b(?:plot|graph|chart|diagram|schematic|micrograph|image|map|photograph|histogram|"
+        r"scatter|curve|bar chart|flow ?chart)\b",
+        re.IGNORECASE,
+    )
+
+    #: The third: what the axes carry. A figure whose axes are never named is a picture the
+    #: listener cannot reconstruct.
+    AXES = re.compile(
+        r"\b(?:axis|axes|x[- ]axis|y[- ]axis|horizontal|vertical|against|versus)\b", re.IGNORECASE
+    )
+
+    TITLE_CHARS = 125
+
+    def check(self, script: Script) -> list[Violation]:
+        out: list[Violation] = []
+        for beat in script.beats():
+            if beat.type is not BeatType.FIGURE or not beat.text.strip():
+                continue
+            text = beat.text.strip()
+            if self.ANNOUNCEMENT.search(text):
+                continue
+            first = _first_sentence(text)
+            if len(first) > self.TITLE_CHARS:
+                out.append(
+                    self._violation(
+                        f"opening statement is {len(first)} characters, "
+                        f"over the {self.TITLE_CHARS}-character title cap",
+                        first,
+                        beat.id,
+                    )
+                )
+            if not self.KINDS.search(text):
+                out.append(
+                    self._violation(
+                        "description never says what kind of figure it is", text, beat.id
+                    )
+                )
+            elif not self.AXES.search(text):
+                out.append(
+                    self._violation(
+                        "description never names the axes or what is plotted against what",
+                        text,
+                        beat.id,
+                    )
+                )
+        return out
+
+
 #: The M4 script rule set, in report order.
 SCRIPT_RULE_TYPES: tuple[type[ScriptRule], ...] = (
     PrequestionsFromCards,
@@ -584,6 +775,9 @@ SCRIPT_RULE_TYPES: tuple[type[ScriptRule], ...] = (
     AnchorsAreUnique,
     AnalogiesStateTheirLimit,
     ChunksAlignWithSentences,
+    AnaphoraResolvesAcrossBeats,
+    TableCaptionComesFirst,
+    FigureDescriptionFollowsTemplate,
 )
 
 
@@ -593,6 +787,13 @@ def script_rules(profile: Profile | None = None) -> tuple[ScriptRule, ...]:
 
 
 # -- helpers ---------------------------------------------------------------------------------
+
+
+def _first_sentence(text: str) -> str:
+    """The opening sentence, for the rules that care what a beat leads with."""
+    stripped = text.strip()
+    match = re.search(r"[.?!](?:\s|$)", stripped)
+    return stripped[: match.end()].strip() if match else stripped
 
 
 def _words(text: str) -> list[str]:

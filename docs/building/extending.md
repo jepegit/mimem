@@ -64,6 +64,26 @@ Then add it to `SCRIPT_RULE_TYPES` and give it a fixture pair in
 `tests/unit/test_script_lint.py` — a mutation of a real plan that breaks it. The test suite
 asserts that *every* rule has one, so a rule without a failing example will not merge.
 
+### Which family does your rule belong to?
+
+There are three, and the answer is simply *what does the rule need to look at*:
+
+| Family | Reads | Lives in |
+|---|---|---|
+| Text rule | the narration, as a string | `lint/rules.py` |
+| Script rule | the plan: beats, segments, timings, cards | `lint/script_rules.py` |
+| Artefact rule | the source document **and** the rendered tracks | `lint/artefact_rules.py` |
+
+Reach for the last one only when the rule is genuinely a statement about the *difference*
+between two artefacts — "the exact value survives in `study.md`", "what triage dropped is not
+narrated". These are the rules that catch the silent failures, because both artefacts are
+individually well-formed the whole time.
+
+An artefact rule takes a `Bundle` instead of a `Script`, and needs its pair in
+`tests/unit/test_artefact_lint.py`. It also costs something: a caller that has only a script
+cannot run it, and `LintReport.skipped` will say so. That is deliberate — a report that quietly
+counted fewer rules would be worse than one that admits what it did not check.
+
 Three conventions:
 
 - **The ID is the rule ID** from [the design rules](../DESIGN-RULES.md). If your rule is not in

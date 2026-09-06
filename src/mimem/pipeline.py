@@ -20,7 +20,7 @@ from mimem.config import Listener, Profile
 from mimem.elaborate import ElaborationReport, elaborate
 from mimem.ingest import load
 from mimem.ir import ConceptRegistry, Document, Script
-from mimem.lint import LintReport, lint_script
+from mimem.lint import Bundle, LintReport, lint_all
 from mimem.llm.client import Client
 from mimem.plan import plan
 from mimem.render import Artefacts, render
@@ -107,7 +107,7 @@ def build_all(
         elaboration = elaborate(doc, registry, profile, listener, client, budget=budget)
 
     script = plan(doc, registry, profile, listener)
-    artefacts = render(script)
+    artefacts = render(script, doc)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
@@ -122,7 +122,7 @@ def build_all(
         registry=registry,
         script=script,
         artefacts=artefacts,
-        lint=lint_script(script, artefacts.audio, profile),
+        lint=lint_all(Bundle(script, doc, artefacts.audio, artefacts.study), profile),
         elaboration=elaboration,
         written=[*written, *(out_dir / name for name in INTERMEDIATE)],
     )
@@ -137,7 +137,7 @@ def replan(out_dir: Path, profile: Profile, listener: Listener | None = None) ->
     doc = Document.from_json((out_dir / "doc.ir.json").read_bytes())
     registry = ConceptRegistry.from_json((out_dir / "registry.json").read_bytes())
     script = plan(doc, registry, profile, listener)
-    artefacts = render(script)
+    artefacts = render(script, doc)
 
     (out_dir / "script.json").write_text(script.to_json(), encoding="utf-8")
     written = artefacts.write(out_dir)
@@ -148,6 +148,6 @@ def replan(out_dir: Path, profile: Profile, listener: Listener | None = None) ->
         registry=registry,
         script=script,
         artefacts=artefacts,
-        lint=lint_script(script, artefacts.audio, profile),
+        lint=lint_all(Bundle(script, doc, artefacts.audio, artefacts.study), profile),
         written=written,
     )

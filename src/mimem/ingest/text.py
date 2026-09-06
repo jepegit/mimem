@@ -2,6 +2,13 @@
 
 Small, but not a toy: it is the fastest way to test the whole downstream pipeline without a PDF
 in the loop, and it is how pasted abstracts and preprint sources get in.
+
+Equations, tables and figures are recognised as themselves rather than as prose. That mattered
+more than it looked: a display equation left as a paragraph is *narrated*, and the linter has no
+way to object, because by the time it sees the beat there is nothing left to say the thing was
+ever an equation. Rules ``MTH-04``, ``TBL-02`` and ``FIG-01`` are all statements about blocks
+that this adapter previously could not produce, so on a Markdown source they were unfalsifiable
+-- which is a worse condition than failing.
 """
 
 from __future__ import annotations
@@ -18,6 +25,19 @@ SETEXT_H1_RE = re.compile(r"^=+\s*$")
 SETEXT_H2_RE = re.compile(r"^-{2,}\s*$")
 LIST_RE = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+\S")
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
+
+#: A display equation: ``$$`` on its own line, or a whole line wrapped in one pair.
+MATH_FENCE_RE = re.compile(r"^\s*\$\$\s*$")
+MATH_INLINE_RE = re.compile(r"^\s*\$\$(?P<body>.+?)\$\$\s*$")
+
+#: A pipe table. The separator row is what distinguishes one from a line that happens to
+#: contain pipes, so a table is only recognised once its second row confirms it.
+TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+TABLE_RULE_RE = re.compile(r"^\s*\|(?:\s*:?-{2,}:?\s*\|)+\s*$")
+
+#: An image, and the caption convention every paper uses for one.
+IMAGE_RE = re.compile(r"^\s*!\[(?P<alt>[^\]]*)\]\([^)]*\)\s*$")
+CAPTION_RE = re.compile(r"^\s*\**(?:figure|fig\.|table|scheme)\s*\d+", re.IGNORECASE)
 
 
 @register
@@ -79,6 +99,8 @@ class TextAdapter(Adapter):
             buffer = []
             buffer_kind = BlockKind.PARAGRAPH
 
+        in_math = False
+
         for i, line in enumerate(lines):
             fence = FENCE_RE.match(line)
             if in_fence:
@@ -87,6 +109,13 @@ class TextAdapter(Adapter):
                     in_fence = False
                     flush()
                 continue
+            if in_math:
+                if MATH_FENCE_RE.match(line):
+                    in_math = False
+                    flush()
+                else:
+                    buffer.append(line)
+                continue
             if fence:
                 flush()
                 in_fence = True
@@ -94,6 +123,40 @@ class TextAdapter(Adapter):
                 buffer_kind = BlockKind.CODE
                 buffer.append(line)
                 continue
+
+            inline_math = MATH_INLINE_RE.match(line)
+            if inline_math:
+                flush()
+                emit(BlockKind.EQUATION, inline_math.group("body"))
+                continue
+            if MATH_FENCE_RE.match(line):
+                flush()
+                in_math = True
+                buffer_kind = BlockKind.EQUATION
+                continue
+
+            image = IMAGE_RE.match(line)
+            if image:
+                flush()
+                emit(BlockKind.FIGURE, image.group("alt") or "figure")
+                continue
+
+            if TABLE_ROW_RE.match(line) and TABLE_RULE_RE.match(
+                lines[i + 1] if i + 1 < len(lines) else ""
+            ):
+                flush()
+                buffer_kind = BlockKind.TABLE
+                buffer.append(line)
+                continue
+            if buffer_kind is BlockKind.TABLE:
+                if TABLE_ROW_RE.match(line):
+                    buffer.append(line)
+                    continue
+                flush()
+
+            if not buffer and CAPTION_RE.match(line):
+                flush()
+                buffer_kind = BlockKind.CAPTION
 
             if not line.strip():
                 flush()

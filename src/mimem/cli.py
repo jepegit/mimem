@@ -7,6 +7,9 @@ afterthought -- it is how you find out that ingestion quietly ate the methods se
 
 from __future__ import annotations
 
+import contextlib
+import io
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Annotated
@@ -22,6 +25,7 @@ from mimem.concepts import norms
 from mimem.config import Listener, Profile, Settings, load_listener, load_profile
 from mimem.elaborate import elaborate as run_elaborate
 from mimem.elaborate import plan_requests
+from mimem.eval import BASELINE
 from mimem.ingest import IngestError, available_extensions
 from mimem.ingest import load as run_ingest
 from mimem.ir import (
@@ -33,8 +37,9 @@ from mimem.ir import (
     Document,
     Script,
 )
-from mimem.lint import LintReport, Severity
+from mimem.lint import Bundle, LintReport, Severity
 from mimem.lint import lint as run_lint
+from mimem.lint import lint_all as run_lint_all
 from mimem.lint import lint_script as run_lint_script
 from mimem.llm import Cached, Client, FixtureClient, NullClient
 from mimem.llm.cost import BudgetExceededError
@@ -42,6 +47,7 @@ from mimem.pipeline import build_all
 from mimem.plan import plan as run_plan
 from mimem.render import narrate as run_narrate
 from mimem.render import render as run_render
+from mimem.render import render_audio
 from mimem.triage import drop_report
 from mimem.triage import triage as run_triage
 
@@ -51,8 +57,32 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-console = Console()
-err = Console(stderr=True)
+
+
+def _speakable_console(*, stderr: bool = False) -> Console:
+    """A console that cannot be killed by the text it is asked to print.
+
+    Windows terminals still default to cp1252, which has no code point for most of what a
+    scientific PDF contains. A single U+2206 in a ninety-eight page review was enough to end
+    ``mimem build`` in a ``UnicodeEncodeError`` traceback -- and the character was in a *lint
+    violation*, so the crash landed exactly where the tool was trying to say what was wrong
+    with the document. The artefacts had already been written; only the report died.
+
+    Replacing the unencodable character costs a "?" in a terminal that could not have shown the
+    real one anyway. Set on the CLI's own consoles rather than by reconfiguring ``sys.stdout``,
+    because the MCP server shares this process family and nothing may touch its stdout.
+    """
+    stream = sys.stderr if stderr else sys.stdout
+    # Not every stdout is a real one: pytest and the notebook capture replace it with objects
+    # that have no encoding to reconfigure, and there is nothing to fix in those.
+    if isinstance(stream, io.TextIOWrapper):
+        with contextlib.suppress(ValueError, OSError):
+            stream.reconfigure(errors="replace")
+    return Console(stderr=stderr)
+
+
+console = _speakable_console()
+err = _speakable_console(stderr=True)
 
 
 def _fail(message: str) -> None:
@@ -301,9 +331,11 @@ def lint(
 ) -> None:
     """Stage 9: the acceptance test.
 
-    Given a build directory it checks both halves -- the narration text against the speakability
-    rules, and the plan against the structure, retrieval and spacing rules. Given a bare
-    ``audio.md`` it can only do the first, and says so.
+    How much it can check depends on what it is given, and it always says which. A build
+    directory has everything: the narration against the speakability rules, the plan against the
+    structure, retrieval and spacing rules, and the artefacts against each other. A bare
+    ``script.json`` cannot answer the cross-artefact rules, and a bare ``audio.md`` can only
+    answer the first family.
     """
     settings = Settings()
     profile, _ = _profile_and_listener(profile_name, None, settings)
@@ -311,12 +343,20 @@ def lint(
     script_file = _find_script(target)
     if script_file is not None:
         script = _read_script(script_file)
-        audio = target / "audio.md" if target.is_dir() else None
-        report = run_lint_script(
-            script,
-            audio.read_text(encoding="utf-8") if audio and audio.exists() else None,
-            profile,
+        audio_file = target / "audio.md" if target.is_dir() else None
+        audio = (
+            audio_file.read_text(encoding="utf-8")
+            if audio_file and audio_file.exists()
+            else render_audio(script)
         )
+        study_file = target / "study.md" if target.is_dir() else None
+        doc = _sibling_document(target)
+        if doc is not None and study_file is not None and study_file.exists():
+            report = run_lint_all(
+                Bundle(script, doc, audio, study_file.read_text(encoding="utf-8")), profile
+            )
+        else:
+            report = run_lint_script(script, audio, profile)
     else:
         path = target / "audio.md" if target.is_dir() else target
         if not path.exists():
@@ -536,6 +576,61 @@ def build(
         raise typer.Exit(code=1)
 
 
+@app.command("eval")
+def evaluate(
+    corpus: Annotated[
+        Path | None, typer.Option("--corpus", help="directory of documents to measure")
+    ] = None,
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    update: Annotated[
+        bool, typer.Option("--update", help="write the result as the new committed baseline")
+    ] = False,
+    baseline_path: Annotated[
+        Path | None, typer.Option("--baseline", help="baseline to compare against")
+    ] = None,
+    as_json_output: Annotated[bool, typer.Option("--json", help="print metrics as JSON")] = False,
+) -> None:
+    """Measure the corpus, and compare it against the committed baseline.
+
+    Exits non-zero on a regression, which is what makes it useful in CI: the linter would still
+    be green, because none of the ways this system silently gets worse are broken output.
+
+    ``--update`` writes the new numbers down. That is the only way to make a regression pass,
+    and it puts the worse number in the diff where a reviewer has to look at it.
+    """
+    from mimem.eval import as_json, load_baseline, run, save_baseline, table
+
+    profile, _ = _profile_and_listener(profile_name, None, Settings())
+    paths = sorted(corpus.iterdir()) if corpus is not None else None
+    measured = run(paths, profile)
+    if not measured.documents:
+        _fail("no documents to measure")
+        return
+
+    console.print(as_json(measured) if as_json_output else table(measured))
+
+    path = baseline_path or BASELINE
+    if update:
+        save_baseline(measured, path)
+        console.print(f"[green]baseline written[/] {path}")
+        return
+
+    previous = load_baseline(path)
+    if previous is None:
+        console.print(f"[yellow]no baseline at {path}[/]; run with --update to write one")
+        return
+
+    regressions = measured.compare(previous)
+    if not regressions:
+        console.print(f"[green]no regressions[/] against {path}")
+        return
+    for document, lines in regressions.items():
+        console.print(f"[red]{document}[/]")
+        for line in lines:
+            console.print(f"  {line}")
+    raise typer.Exit(code=1)
+
+
 def _profile_and_listener(
     profile_name: str, listener_file: Path | None, settings: Settings
 ) -> tuple[Profile, Listener]:
@@ -664,6 +759,7 @@ def _report_lint(report: LintReport, examples: int = 3) -> None:
     """Print a lint report: counts first, then a few examples of each rule."""
     if report.ok and not report.warnings:
         console.print(f"[green]lint clean[/] ({len(report.checked_rules)} rules)")
+        _report_skipped(report)
         return
     style = "bold red" if not report.ok else "yellow"
     console.print(f"[{style}]lint:[/] {report.summary()}")
@@ -677,6 +773,15 @@ def _report_lint(report: LintReport, examples: int = 3) -> None:
         console.print(f"  [{colour}]{v.rule}[/] {where}: {v.message}", style="dim")
         if v.excerpt:
             console.print(f"      …{v.excerpt}…", style="dim")
+    _report_skipped(report)
+
+
+def _report_skipped(report: LintReport) -> None:
+    """A clean report that skipped rules is not the same as a clean report, and must not read
+    like one. Printed in both branches, because the branch it is easiest to misread is the
+    green one."""
+    for line in report.skipped:
+        console.print(f"  [yellow]not checked[/] {line}", style="dim")
 
 
 # -- printing helpers --------------------------------------------------------------------

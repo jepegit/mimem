@@ -44,6 +44,18 @@ jobs:
       - name: Test
         run: uv run pytest --cov=mimem --cov-report=term-missing
 
+      # The linter says whether the output is broken. This says whether it got *worse*, which
+      # is the failure mode a system of ninety interacting rules actually has: a scorer drifts,
+      # the scheduler finds one fewer slot, a triage rule eats a paragraph, and every build
+      # stays green while teaching less. The baseline is committed, so lowering a number means
+      # writing the lower number into the diff where a reviewer has to look at it.
+      #
+      # One platform: the metrics are deterministic, and running it four times would only
+      # multiply the wall clock.
+      - name: Check for regressions against the baseline
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: uv run mimem eval
+
       # The documentation is part of the product, and a broken cross-reference in it is a
       # defect like any other. Building on Linux only: the output is identical and this is
       # about catching bad links, not platform differences.

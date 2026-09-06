@@ -37,11 +37,28 @@ ISBN = re.compile(r"\bISBN[- ]?(?:13|10)?:?\s*[\d-]{10,17}\b", re.I)
 
 #: "as shown in Figure 4b", "see Table 2", "Eq. (3)" -- meaningless without the page in front
 #: of you (rule STR-08). Rewritten rather than deleted, so the sentence still stands up.
+#:
+#: The number is dotted because section numbers are: "Section 2.1.4" used to match only its
+#: "Section 2", leaving the sentence to say "corresponding to.1.4" out loud. A partial match is
+#: worse than no match at all here -- an untouched cross-reference is merely useless, and a
+#: half-eaten one is a number the listener will try to make sense of. ``\.\d`` requires a digit
+#: after the dot, so a reference ending a sentence ("in Figure 4. The next result...") still
+#: stops at the 4.
 CROSS_REFERENCE = re.compile(
     r"\b(?:as\s+)?(?:shown|seen|illustrated|summari[sz]ed|listed|given|presented|reported)?\s*"
     r"\b(?:in|by)?\s*"
     r"\(?\b(?:Fig(?:ure|s?)?|Tables?|Schemes?|Eq(?:uation|s?)?|Sect(?:ion)?s?|Ref(?:s?|erence)?)\.?\s*"
-    r"(?:S)?\d+[a-z]?(?:\s*(?:[-–,]|and)\s*(?:S)?\d+[a-z]?)*\)?",
+    r"(?:S)?\d+(?:\.\d+)*[a-z]?(?:\s*(?:[-–,]|and)\s*(?:S)?\d+(?:\.\d+)*[a-z]?)*\)?",
+    re.IGNORECASE,
+)
+
+#: "as shown in the figure", "see the table above" -- the same instruction as a numbered
+#: cross-reference and just as unfollowable, but with no number for the pattern above to anchor
+#: on. STR-08 catches these in the finished audio; this is what stops them getting there.
+BARE_CROSS_REFERENCE = re.compile(
+    r",?\s*\b(?:as\s+)?(?:shown|seen|illustrated|summari[sz]ed|listed|given|presented|depicted)"
+    r"\s+(?:in|by)\s+the\s+(?:figure|table|plot|graph|chart|scheme|diagram|panel|equation)s?"
+    r"(?:\s+(?:above|below|opposite))?",
     re.IGNORECASE,
 )
 
@@ -146,10 +163,21 @@ def verbalize_citations(
     text = NUMERIC_CITATION.sub("", text)
     if drop_cross_references:
         text = CROSS_REFERENCE.sub("", text)
+        text = BARE_CROSS_REFERENCE.sub("", text)
 
     # Tidy the punctuation the removals left behind: " ." and doubled spaces and "( )".
     text = re.sub(r"\(\s*\)", "", text)
+    # And the preposition, which is the part a reader would notice. Deleting "Section 2.1.4"
+    # from "corresponding to Section 2.1.4, where..." leaves "corresponding to, where..." --
+    # grammatical debris that a speech engine reads out with a straight face. The preposition
+    # only ever belonged to the reference, so it goes with it.
+    text = re.sub(
+        r"\s+\b(?:in|to|by|at|of|from|see|per)\b\s*(?=[.,;:)])", "", text, flags=re.IGNORECASE
+    )
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+    # A removal at the start of a sentence leaves the comma that separated it from the rest.
+    text = re.sub(r"^\s*,\s*", "", text)
+    text = re.sub(r"([.!?])\s*,\s*", r"\1 ", text)
     text = re.sub(r"([(\[])\s+", r"\1", text)
     text = re.sub(r"\s{2,}", " ", text)
     return text.strip()

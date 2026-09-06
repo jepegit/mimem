@@ -150,24 +150,80 @@ class NoVisualOnlyConstructs(LintRule):
         (r"\bvs\.", "'vs.' must be 'versus'"),
         (r"\betc\.", "'etc.' must be 'and so on'"),
         (r"§|¶|†|‡", "page-only mark"),
-        (r"\b[A-Z]{2,}\b(?=[.,]?\s)", "unexpanded acronym"),
     )
 
     def check(self, text: str) -> list[Violation]:
+        return [
+            self._violation(text, m.start(), m.end(), label)
+            for pattern, label in self.PATTERNS
+            for m in re.finditer(pattern, text)
+        ]
+
+
+class AcronymsAreExpanded(LintRule):
+    """SYM-02: an acronym is expanded once, and then it is just a word.
+
+    This check used to live in ``SENT-04`` and fire on *every* occurrence of *every* acronym. On
+    a ninety-eight page review that was 670 of the report's 828 warnings -- for acronyms the
+    verbalizer had expanded correctly on first use, which is exactly what the rule asks for. A
+    report that is 80% one rule being wrong is not a report anybody reads, so the rule that
+    produced it was worse than no rule.
+
+    Two changes make it mean something. It belongs to ``SYM-02``, which is the rule about
+    acronyms; ``SENT-04`` is about constructs that only work on a page. And it reports once per
+    *acronym*, not once per use, and only when the expansion appears nowhere at all -- because
+    "expanded on first use, then used" is the correct output, and there is no point at which the
+    second and subsequent uses become a defect.
+
+    A warning: when the source never expands its own acronym there is nothing to expand it to,
+    and inventing one would be a worse failure than saying the letters.
+    """
+
+    id = "SYM-02"
+    description = "every acronym is expanded somewhere in the narration"
+    severity = Severity.WARNING
+
+    CANDIDATE = re.compile(r"\b[A-Z]{2,6}\b(?=[.,;:]?\s)")
+
+    #: Units and chemistry that are read as letters and have no expansion to give: "CO two",
+    #: "DC", "pH". Listing them is a judgement call; getting one wrong costs a warning.
+    NOT_ACRONYMS = frozenset({"CO", "DC", "AC", "PH", "UV", "IR", "OK", "II", "III", "IV", "VI"})
+
+    def check(self, text: str) -> list[Violation]:
         out: list[Violation] = []
-        for pattern, label in self.PATTERNS:
-            severity = Severity.WARNING if "acronym" in label else self.severity
-            for m in re.finditer(pattern, text):
-                out.append(
-                    Violation(
-                        rule=self.id,
-                        message=label,
-                        excerpt=_excerpt(text, m.start(), m.end()),
-                        severity=severity,
-                        line=_line_of(text, m.start()),
-                    )
+        for acronym in dict.fromkeys(self.CANDIDATE.findall(text)):
+            if acronym in self.NOT_ACRONYMS:
+                continue
+            if self._expanded(text, acronym):
+                continue
+            first = re.search(r"\b" + re.escape(acronym) + r"\b", text)
+            if first is None:  # unreachable; the acronym came from this text
+                continue
+            out.append(
+                self._violation(
+                    text,
+                    first.start(),
+                    first.end(),
+                    f"{acronym!r} is never expanded; the listener has to guess",
                 )
+            )
         return out
+
+    def _expanded(self, text: str, acronym: str) -> bool:
+        """Does the narration say anywhere what these letters stand for?
+
+        ``, or TR,`` is what the parenthetical verbalizer produces from "thermal runaway (TR)",
+        and is the form that will nearly always match. The rest are how a person writes it.
+        """
+        escaped = re.escape(acronym)
+        return bool(
+            re.search(
+                rf",?\s+or\s+{escaped}\b"
+                rf"|\b{escaped}\b\s*(?:refers to|stands for|means|is short for)"
+                rf"|\bwe call (?:it|this|them)\s+{escaped}\b",
+                text,
+            )
+        )
 
 
 class SentenceLength(LintRule):
@@ -251,4 +307,5 @@ DEFAULT_RULES: tuple[LintRule, ...] = (
     NoVisualOnlyConstructs(),
     NoDanglingReferences(),
     SentenceLength(),
+    AcronymsAreExpanded(),
 )

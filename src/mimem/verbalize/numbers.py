@@ -257,6 +257,15 @@ class NumberVerbalizer:
                 ),
                 "designation",
             ),
+            # "2.3.1" is a section number, a version or a clause reference -- never a decimal.
+            # The plain pass reads only one decimal group, so it said "two point three" and
+            # walked away from ".1", which then reached the audio track as a digit. Matched
+            # before "plain" so the whole run is claimed at once; two dots minimum, because one
+            # dot is an ordinary number and belongs to the pass below.
+            (
+                re.compile(r"(?<![\w.])(?P<levels>\d+(?:\.\d+){2,})(?!\d)(?!\.\d)"),
+                "levelled",
+            ),
             (re.compile(rf"(?<![\w.])(?P<v>{num})" + unit.format(n="4")), "plain"),
         ]
 
@@ -286,6 +295,8 @@ class NumberVerbalizer:
             return _attach_unit(m["hi"], m.group("u3"), words)
         if kind == "ordinal":
             return ordinal_to_words(int(m["ord"]))
+        if kind == "levelled":
+            return " point ".join(int_to_words(int(p)) for p in m["levels"].split("."))
         if kind == "designation":
             token = m["token"]
             unit = spoken_unit(token)

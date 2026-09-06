@@ -455,5 +455,19 @@ ANA-01  analogy states its limit        GRD-01   beats have spans or are typed g
 COH-01  drop list respected             GRD-03   numbers/names/directions verified
 ```
 
-Each lint rule ships with fixtures in `tests/fixtures/lint/` — a passing and a failing example —
-so the rules stay honest as the generators change.
+All twenty-eight are implemented. `mimem lint` runs them, `mimem build` exits non-zero on an
+error, and CI runs both on every pull request.
+
+Each lint rule ships with a passing and a failing example, so the rules stay honest as the
+generators change. **They are mutations of a real build rather than files in
+`tests/fixtures/lint/`**, which is a deviation from this document's original plan and a
+deliberate one: a mutation says what the rule is *about* — "delete the answer beat", "give two
+concepts the same anchor" — and cannot drift out of date as the script model changes, because it
+is derived from a real plan every time. They live in `tests/unit/test_script_lint.py` and
+`tests/unit/test_artefact_lint.py`, and a test asserts that every rule has a pair, so a rule with
+no failing example will not merge.
+
+Six of these rules were written after the rest, and writing them found four defects that every
+other check had passed: a competing-interests sentence and a keyword list narrated aloud, a
+subscripted symbol reaching the audio track as a bare digit, and equations disappearing from
+`study.md` entirely. That is the argument for the rule set, stated as cheaply as it can be.

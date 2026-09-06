@@ -183,12 +183,18 @@ sessions — is not.
 | ✅ **M3** | Concepts scored by difficulty × importance, shifted by what you already know. |
 | ✅ **M4** | The planner: segments, questions, pauses, the spacing scheduler, four artefacts. |
 | ✅ **M5** | The optional elaboration layer, and the grounding gate that makes it trustable. |
-| ⬜ **M6** | The rest of the lint suite, and an evaluation harness — the first time any of this gets *measured* rather than argued from the literature. |
+| ✅ **M6** | The complete lint suite, and an evaluation harness — the first time any of this gets *measured* rather than argued from the literature. |
 | ⬜ **M7** | The hand-off to a speech engine. One command from PDF to something you can play. |
 
-Two things you should know before trusting it: the **live API adapter has never been run** (there
-was no key in the environment it was written in), and none of the design has been **measured on
-mimem's own output** yet. Both are written down in [the plan](docs/PLAN-part1.md).
+Two things you should know before trusting it. The **live API adapter has never been run** (there
+was no key in the environment it was written in). And the evaluation that now exists is the
+mechanical layer only — it measures whether the output still has the properties the design asks
+for, *not* whether anyone learned anything; the layers that would answer that need a model and
+then people. Both are written down in [the plan](docs/PLAN-part1.md).
+
+What the measuring found immediately, on mimem's own output: **no term is ever defined unless you
+turn the elaboration layer on**, and **half the recurring concepts have gaps that shrink rather
+than grow**. Neither breaks a rule. Both are now numbers in a file that CI watches.
 
 ---
 

@@ -113,6 +113,15 @@ MAX_UNIT_EXPONENT = 4
 #: Exponents that have a spoken name rather than a number.
 _EXPONENT_WORDS = {2: "square", 3: "cubic"}
 
+#: Units that are ever squared or cubed in prose, and so may take a *positive* exponent welded
+#: on with no separator. Without this list "H2" reads as "square henries" -- and in a paper
+#: about batteries venting hydrogen it appears constantly, giving "the square henries
+#: concentration". Area and volume are the only readings a bare trailing 2 or 3 plausibly has,
+#: so the units that have an area or a volume are the units that may claim one. Negative
+#: exponents are not restricted: "s-1" is per second whatever the unit, and nothing else is
+#: spelled that way.
+_DIMENSIONAL = frozenset({"m", "cm", "mm", "km", "nm", "µm", "μm", "um", "Å", "in", "ft", "yd"})
+
 _SUPERSCRIPTS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-")
 
 #: A unit token as it appears after a number: letters, degree signs, slashes, exponents.
@@ -141,6 +150,10 @@ def _split_exponent(symbol: str) -> tuple[str, int]:
     # A trailing digit is only an exponent if the stem is a unit we recognise; otherwise it is
     # part of a name ("NMC811", "H2O") and must not be pulled apart.
     if _lookup(stem) is None:
+        return symbol, 1
+    # ...and, for a positive exponent, only if the unit is one that has an area or a volume.
+    # "H2" is hydrogen far more often than it is square henries.
+    if exponent > 1 and stem not in _DIMENSIONAL:
         return symbol, 1
     return stem, exponent
 

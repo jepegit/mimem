@@ -139,6 +139,43 @@ Given a build directory it checks both halves — the narration text against the
 rules, and the plan against the structure, retrieval and spacing rules. Given a bare `audio.md`
 it can only do the first, and says so. Exits non-zero on any error.
 
+### `eval`
+
+```bash
+uv run mimem eval
+```
+
+Builds every document in `tests/fixtures/docs`, measures the result, and compares it against the
+committed baseline in `tests/fixtures/eval/baseline.json`. Exits non-zero on a regression.
+
+This is the check the linter cannot do. Nothing in mimem breaks loudly: a concept scorer drifts,
+the spacing scheduler finds one fewer slot, a triage rule eats an extra paragraph — and every one
+of those produces a programme that lints perfectly clean and teaches less. The metrics are the
+handful of quantities the design is a claim about, so a design that stopped being true shows up
+as a number that moved.
+
+| Column | What it is |
+|---|---|
+| `used` | programme length as a fraction of its duration budget |
+| `q/min` | retrieval prompts per minute |
+| `gloss` | concepts the listener was given a definition for |
+| `spaced` | concepts met more than once in the body |
+| `expand` | of the concepts met three times or more, those whose gaps never shrink |
+| `ground` | beats that can point at a page, of those required to |
+| `values` | source values that reached `study.md` |
+| `kept` | words of the source that survived triage |
+
+```bash
+uv run mimem eval --update
+```
+
+Writes the current numbers down as the new baseline. This is the only way to make a real
+regression pass, and it is a separate command on purpose: it puts the worse number in the diff
+where a reviewer has to look at it.
+
+`--corpus DIR` measures your own documents instead, which is the fastest way to find out whether
+mimem falls over on a field it has never seen. `--json` prints the metrics rather than the table.
+
 ### `narrate`
 
 ```bash

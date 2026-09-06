@@ -39,6 +39,13 @@ _TRANSFORM_KINDS = frozenset(
     {BlockKind.TABLE, BlockKind.FIGURE, BlockKind.EQUATION, BlockKind.CODE}
 )
 
+#: Back-matter paragraphs usually carry their own label, and the label is often the only thing
+#: separating them from prose: "Conflicts of Interest: The authors declare none." Anchoring the
+#: declaration patterns at the start of the block missed every paper that writes it that way,
+#: and a competing-interests sentence reached the audio track of a real paper before the COH-01
+#: lint rule found it. Kept short and colon-terminated so it cannot swallow a real sentence.
+_LABEL = r"(?:[A-Z][A-Za-z' -]{2,40}:\s*)?"
+
 #: Sentences that exist to organise the page, not to say anything.
 BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -52,7 +59,7 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "declaration",
         re.compile(
-            r"^\s*(the\s+authors?\s+declare|no\s+conflicts?\s+of\s+interest|"
+            r"^\s*" + _LABEL + r"(the\s+authors?\s+declare|no\s+conflicts?\s+of\s+interest|"
             r"all\s+authors?\s+(have\s+)?(read|approved)|data\s+(will\s+be\s+)?available)",
             re.I,
         ),
@@ -68,6 +75,14 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(r"^\s*(graphical abstract|highlights|in brief|key ?points)\s*:?\s*$", re.I),
     ),
     ("correspondence", re.compile(r"^\s*(correspondence|corresponding author)\b", re.I)),
+    (
+        # Keywords are a heading in some journals and a bold run-in line in others. The
+        # heading-driven role assignment catches the first and could never catch the second, so
+        # a keyword list narrated as prose -- five noun phrases and no verb -- reached the
+        # audio track until rule COH-01 was written.
+        "keyword list",
+        re.compile(r"^\s*\**\s*key\s?words?\s*\**\s*:", re.I),
+    ),
     (
         # "Supplemental information can be found online at ..." -- a pointer to something the
         # listener cannot follow, ending in an identifier that must never be spoken (NUM-05).

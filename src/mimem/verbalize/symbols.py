@@ -11,6 +11,7 @@ these defaults.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 GREEK = {
     "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "ε": "epsilon", "ζ": "zeta",
@@ -19,6 +20,13 @@ GREEK = {
     "τ": "tau", "υ": "upsilon", "φ": "phi", "χ": "chi", "ψ": "psi", "ω": "omega",
     "Α": "alpha", "Β": "beta", "Γ": "gamma", "Δ": "delta", "Θ": "theta", "Λ": "lambda",
     "Ξ": "xi", "Π": "pi", "Σ": "sigma", "Φ": "phi", "Ψ": "psi", "Ω": "omega",
+    # A typesetter reaching for "delta Q" may pick the Greek letter (U+0394) or the
+    # mathematical increment (U+2206), and the two are indistinguishable on the page. NFKC
+    # normalization (below) folds most such look-alikes -- the ohm sign onto omega, the
+    # micro sign onto mu -- but not this pair, so it is listed. A 98-page review used it
+    # exactly once, which was enough to fail TTS-01 and, on a Windows console, to crash the
+    # report that was trying to say so.
+    "∆": "delta",  # U+2206 INCREMENT
 }  # fmt: skip
 
 OPERATORS = {
@@ -32,6 +40,7 @@ OPERATORS = {
     "∑": " the sum of ", "∫": " the integral of ", "∂": " partial ", "∇": " del ",
     "√": " the square root of ", "°": " degrees ", "%": " percent ",
     "+": " plus ", "&": " and ", "@": " at ",
+    "−": " minus ", "‰": " per mille ", "′": " prime ", "″": " double prime ",
 }  # fmt: skip
 
 #: Characters that carry no spoken content at all -- page furniture, footnote markers, marks
@@ -41,6 +50,13 @@ OPERATORS = {
 #: whose partner was lost to a column break. Stray diacritics are extraction damage -- "Bo¨ rner"
 #: for "Börner" -- degraded either way, but at least speakable.
 DROP_CHARS = '§¶†‡•▪◦※★☆©®™|¦^_`{}[]()<>\\/*#$€£¥"¨˜´'
+
+#: Subscripted and superscripted symbols, written the way a source that kept its markup writes
+#: them: ``f_0``, ``C_rate``, ``x^2``. Dropping the marker leaves the index stranded as a bare
+#: token -- "f 0" -- which reads as a digit to the number rules and reached the audio track of a
+#: Markdown source as exactly that. Rewritten before the numbers run, so that the index is
+#: verbalized like any other number and a listener hears "f sub zero".
+SUB_SUPER_RE = re.compile(r"\b([A-Za-z][A-Za-z]{0,3})([_^])\{?([A-Za-z0-9]{1,6})\}?")
 
 #: Written-only abbreviations. Expanded rather than dropped, because they do carry meaning.
 ABBREVIATIONS = {
@@ -83,11 +99,36 @@ def apply_lexicon(text: str, lexicon: dict[str, str]) -> str:
     return text
 
 
+def normalize(text: str) -> str:
+    """Fold compatibility look-alikes onto the code points the rest of the pipeline expects.
+
+    The ohm sign onto omega, the micro sign onto mu, ligatures onto their letters -- and, the
+    reason this runs *first* rather than in the symbol pass where it started: subscript and
+    superscript digits onto ordinary ones. "CO₂" is a chemical formula written with U+2082,
+    which no ``\\d`` matches, so the number verbalizer walks past it. Normalizing after that
+    point turned the subscript into a plain "2" too late for anything to say it, and put a raw
+    digit in the audio track -- a defect the linter caught within one build of the change that
+    caused it.
+
+    Idempotent, so calling it again inside a later stage costs nothing.
+    """
+    return unicodedata.normalize("NFKC", text)
+
+
+def verbalize_indices(text: str) -> str:
+    """Rule SYM-01: say a subscript, do not drop its marker and strand the index."""
+    return SUB_SUPER_RE.sub(
+        lambda m: f"{m.group(1)} {'sub' if m.group(2) == '_' else 'to the power'} {m.group(3)}",
+        text,
+    )
+
+
 def verbalize_symbols(text: str, *, lexicon: dict[str, str] | None = None) -> str:
     """Turn every non-letter that carries meaning into words, and drop the rest."""
     if lexicon:
         text = apply_lexicon(text, lexicon)
 
+    text = normalize(text)
     text = _MATH_PLACEHOLDER.sub("a quantity", text)
 
     for pattern, replacement in ABBREVIATIONS.items():

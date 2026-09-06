@@ -79,7 +79,7 @@ def render(script: Script, doc: Document | None = None) -> Artefacts:
         audio=render_audio(script),
         study=render_study(script, doc),
         cards=render_cards(script),
-        manifest=render_manifest(script),
+        manifest=render_manifest(script, doc),
     )
 
 
@@ -106,18 +106,20 @@ def render_study(script: Script, doc: Document | None = None) -> str:
         + ".\n"
     )
 
+    images = _figure_images(doc)
+
     out.append("\n## Before you start\n")
-    out.extend(_study_beat(b) for b in script.opening)
+    out.extend(_study_beat(b, images) for b in script.opening)
 
     for section in script.sections:
         out.append(f"\n## {section.title}\n")
         for segment in section.segments:
             for beat in segment.beats:
-                out.append(_study_beat(beat))
+                out.append(_study_beat(beat, images))
 
     if script.review:
         out.append("\n## Review\n")
-        out.extend(_study_beat(b) for b in script.review)
+        out.extend(_study_beat(b, images) for b in script.review)
 
     if script.dropped:
         out.append("\n## Cut to fit the duration budget\n")
@@ -164,7 +166,7 @@ def _equation_appendix(script: Script, doc: Document | None, sofar: str) -> list
     return out
 
 
-def _study_beat(beat: Beat) -> str:
+def _study_beat(beat: Beat, images: dict[str, tuple[str, str]] | None = None) -> str:
     """One beat in the written track: the source sentence, its page, and who wrote it."""
     label = _SCAFFOLDING_LABEL.get(beat.type)
     body = (beat.written_text or beat.text).strip()
@@ -173,9 +175,83 @@ def _study_beat(beat: Beat) -> str:
         return f"\n**Q.** {body}\n"
     if beat.type is BeatType.ANSWER:
         return f"**A.** {body}  <sub>{_locator(beat)}</sub>\n"
+
+    picture = _picture(beat, images or {})
     if beat.generated:
-        return f"\n*{label or 'generated'}:* {body}\n"
-    return f"\n{body}  <sub>{_locator(beat)}</sub>\n"
+        return f"\n*{label or 'generated'}:* {body}\n{picture}"
+    return f"\n{body}  <sub>{_locator(beat)}</sub>\n{picture}"
+
+
+def _picture(beat: Beat, images: dict[str, tuple[str, str]]) -> str:
+    """The figure itself, for the one track that can show it.
+
+    The audio track can only ever say that a figure exists. Telling a reader the same thing and
+    then sending them back to the PDF to look at it is the written companion failing at the one
+    job the spoken one cannot do.
+
+    The alt text is the caption's subject, not the beat's own words. A beat says "there's a
+    figure here showing X, it's in the written notes" -- true when spoken, nonsense as the alt
+    text of an image *in* the written notes.
+    """
+    for span in beat.spans:
+        found = images.get(span.block_id)
+        if found:
+            path, alt = found
+            return f"\n![{alt or 'figure'}]({path})\n"
+    return ""
+
+
+def _figure_images(doc: Document | None) -> dict[str, tuple[str, str]]:
+    """Block ID to crop path and alt text, for the figures stage B managed to render."""
+    if doc is None:
+        return {}
+    captions = {b.id: b for b in doc.by_kind(BlockKind.CAPTION)}
+    out: dict[str, tuple[str, str]] = {}
+    for asset in doc.assets:
+        if not asset.path or not asset.block_id:
+            continue
+        meta = (
+            captions[asset.block_id].attrs.get("caption", {}) if asset.block_id in captions else {}
+        )
+        out[asset.block_id] = (asset.path, str(meta.get("subject", "")))
+    return out
+
+
+def _figure_manifest(doc: Document | None) -> list[dict[str, object]]:
+    """Every figure the build rendered: where it came from and what was written.
+
+    In the manifest rather than only on disk because a crop is a *claim about a region of a
+    page*, and a wrong region is the failure mode this stage has. Recording the page and the
+    rectangle makes a bad crop something a reader can check rather than something they have to
+    notice.
+    """
+    if doc is None:
+        return []
+    captions = {b.id: b for b in doc.by_kind(BlockKind.CAPTION)}
+    out: list[dict[str, object]] = []
+    for asset in doc.assets:
+        if not asset.path:
+            continue
+        meta = (
+            captions[asset.block_id].attrs.get("caption", {}) if asset.block_id in captions else {}
+        )
+        out.append(
+            {
+                "id": asset.id,
+                "block_id": asset.block_id,
+                "label": meta.get("label", "figure"),
+                "number": meta.get("number", ""),
+                "subject": meta.get("subject", ""),
+                "page": asset.page,
+                "region": asset.bbox.model_dump() if asset.bbox else None,
+                "path": asset.path,
+                "references": meta.get("references", []),
+                **{
+                    k: v for k, v in asset.attrs.items() if k in {"width", "height", "dpi", "bytes"}
+                },
+            }
+        )
+    return out
 
 
 def _locator(beat: Beat) -> str:
@@ -205,7 +281,7 @@ def render_cards(script: Script) -> str:
 # -- manifest ------------------------------------------------------------------------------
 
 
-def render_manifest(script: Script) -> str:
+def render_manifest(script: Script, doc: Document | None = None) -> str:
     """The audit trail: scores, exposures, spacing, drops, and one chunk per beat."""
     chunks = [
         {
@@ -258,6 +334,7 @@ def render_manifest(script: Script) -> str:
             for cid, c in script.registry.items()
             if c.exposures
         },
+        "figures": _figure_manifest(doc),
         "schedule": [s.model_dump(mode="json") for s in script.schedule],
         "dropped": [d.model_dump(mode="json") for d in script.dropped],
         "notes": script.notes,

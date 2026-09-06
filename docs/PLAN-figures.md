@@ -56,7 +56,7 @@ Missing: figure *units*, rendering, image transport, and placement.
 
 ## 3. Four stages
 
-### Stage A — figure units (no model, no cost)
+### Stage A — figure units (no model, no cost) — **done**
 
 Group blocks into a `Figure`: a caption, the region it belongs to, and the sentences that refer
 to it.
@@ -84,7 +84,7 @@ to it.
 notes." That is the paper's own caption, fully grounded, no model, no risk, and it is most of
 what a listener needed. Everything after this is an improvement on a thing that already works.
 
-### Stage B — rendering (no model)
+### Stage B — rendering (no model) — **done**
 
 `page.get_pixmap(clip=rect)` over the union rect. PyMuPDF is already a dependency, and rendering
 the *region* rather than the embedded images is what catches vector plots — page 10 of the test
@@ -101,6 +101,17 @@ paper has one image block and three vector drawings, and the drawings are the fi
 150 dpi costs four times what 72 does and shows a plot no better. This matters more for the
 conversation path than the API one: every crop crosses the MCP transport as base64, which
 inflates it by a third.
+
+**As built:** `mimem.ingest.crops`, called from the pipeline before the artefacts are rendered,
+because `study.md` links what it produces. Eleven crops from the test paper, 41–255 KB each, and
+the two hardest cases come out right — Figure 9, which shares a page with Figure 8 and 38
+fragments, is cropped to its own region; and Figure 3, which is vector-drawn, comes out whole
+where an approach built on embedded images would have found nothing to crop.
+
+It lives in the adapter layer rather than beside the renderer because its job is reading a PDF,
+and that is what that layer is for. It never raises: a moved source file, a page the PDF does not
+have, an empty region — each costs the reader a picture and leaves the programme untouched, which
+is the right trade for something the audio track never mentions.
 
 Write the crops into the artefact directory (`figures/fig-03.png`), record a hash in the
 manifest, and link them from `study.md`. That last part has value with or without any

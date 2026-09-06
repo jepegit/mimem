@@ -60,7 +60,13 @@ a process that repeats a little every cycle.  <sub>p2</sub>
 Three things it keeps that the audio cannot: the **exact numerals** the audio spelled out, the
 **page** each claim came from, and a **label on every sentence mimem wrote** rather than the
 paper. It also carries a "cut to fit the duration budget" appendix, so even the scaffolding that
-was removed leaves a trace.
+was removed leaves a trace, and an equations appendix for the ones nobody narrated (rule
+`MTH-04`).
+
+And, from a PDF, **the figures themselves**. The audio track can only ever say a figure exists;
+telling a reader the same thing and then sending them back to the source to look at it is the
+written companion failing at the one job the spoken one cannot do. Each figure is cropped out of
+the page into `figures/figure-3.png` and linked under its caption.
 
 ## `cards.json`
 
@@ -117,6 +123,7 @@ The audit trail. This is the file to open when you disagree with something.
 | `structure` | Sections, segments, beats, cards |
 | `concepts` | Every concept with its scores, **the signals that produced them**, and its exposure log |
 | `schedule` | Per concept: how many times you met it, when the last one was, and the interval the schedule was heading towards when the document ran out — the hand-off to part two |
+| `figures` | Every figure crop: its page, the rectangle it claims, the caption's subject, and where the prose refers to it |
 | `dropped` | Every beat the duration budget removed, with the rule that authorised it |
 | `notes` | What the planner could not do, in plain language |
 | `chunks` | One per beat: id, start time, duration, pause after, content hash |
@@ -126,6 +133,8 @@ Two things are worth knowing about it.
 **The signals are there so a ranking can be argued with.** A concept ranked too high is a number
 you can look at, not a black box. Put a correction under `overrides` in `registry.json` and it
 survives every future run.
+
+**A crop is a claim about a rectangle.** `figures` records the page and the region each PNG was cut from, so a crop that grabbed the wrong part of the page is something you can check rather than something you have to notice.
 
 **The chunks are content-addressed.** Re-render after editing one paragraph and only the beats
 whose text actually changed have new hashes, so a future synthesis step re-renders only those.

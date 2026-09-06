@@ -113,6 +113,37 @@ Cross-references are a special hazard: "as shown in Figure 4b" is meaningless in
 reference is either resolved inline (the description is placed where the reference occurs) or
 rewritten ("the measurement I just described").
 
+### 5.4a How badly a model can get a chart wrong — **[A], measured**
+
+The description above says what a *good* figure description contains. It says nothing about whether
+a vision model can produce one, and the chart-understanding literature is blunt that it often
+cannot. This matters more here than anywhere else in the system, because a wrong sentence about a
+figure is unfalsifiable by ear: the listener has no access to the thing being described.
+
+- **CHOCOLATE** (*"Do LVLMs Understand Charts?"*) builds a dataset specifically of **factual errors
+  in machine-generated chart captions** — the failure mode is common enough to be worth its own
+  benchmark.
+- **CharXiv** measures large multimodal models on *realistic* scientific charts and reports the gap
+  against the synthetic benchmarks that preceded it. Papers are the realistic case.
+- The recurring failure modes named across this work are **arithmetic** and **visual perception** —
+  reading a value off an axis, comparing two bars — rather than fluency. Descriptions are wrong in
+  ways that sound right.
+
+This is the evidence behind `PLAN-figures.md` §4, and in particular behind the rule that no
+retrieval card may take its answer from a generated figure description.
+
+**Evaluation material.** **SciCap** (scientific figure captions) and **Chart-to-Text** are figure/
+caption corpora in exactly mimem's domain, so a described figure can be scored against the caption
+the authors wrote. That is a layer-2 evaluation the project does not have yet. Check each corpus's
+licence before redistributing anything.
+
+**For rule FIG-05** — dense data graphics become a table first — the named approach is
+**chart-to-table translation**: `DePlot` (plot-to-table, then reason over the table), `MatCha`
+(chart derendering as pretraining), `StructChart`. These are specialised models rather than a
+prompt, so adopting one is a dependency decision, not a stage of the current plan.
+
+Survey of the area: <https://github.com/khuangaf/Awesome-Chart-Understanding>
+
 ## 5.5 Citations, footnotes, cross-references — **[A] via the coherence principle**
 
 Inline citations are the clearest case of extraneous processing in scientific text. A parenthetical

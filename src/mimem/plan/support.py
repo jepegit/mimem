@@ -216,7 +216,16 @@ def gather(
     pool: dict[str, list[Support]] = {cid: [] for cid in concepts}
 
     for block in retained(doc):
-        if block.kind in {BlockKind.HEADING, BlockKind.REFERENCE, BlockKind.PAGE_ARTIFACT}:
+        # A caption is excluded for the same reason a heading is: it is a label, not a claim.
+        # Left in, it became the supporting sentence for a callback -- and since the caption is
+        # also its figure's announcement, the programme said the same words twice and REP-01
+        # caught it.
+        if block.kind in {
+            BlockKind.HEADING,
+            BlockKind.REFERENCE,
+            BlockKind.PAGE_ARTIFACT,
+            BlockKind.CAPTION,
+        }:
             continue
         weight = _ROLE_WEIGHT.get(block.role, 0.4)
         for start, end in sentences_of(block):

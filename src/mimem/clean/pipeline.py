@@ -11,7 +11,9 @@ Order matters and is not negotiable:
 4. **merge** -- needs artifacts already removed, or a running head glues two paragraphs
    together; and must run before sections, because merging rewrites block IDs.
 5. **sections** -- assigns the IDs that everything downstream references.
-6. **sentences** -- last, so it segments final text.
+6. **figures** -- pairs captions with the fragments they speak for; needs page geometry, which
+   survives this far, and section IDs, which it records against.
+7. **sentences** -- last, so it segments final text.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 from mimem.clean.artifacts import strip_page_artifacts
 from mimem.clean.dehyphenate import dehyphenate
 from mimem.clean.extraction import strip_extraction_artifacts
+from mimem.clean.figures import link_figures
 from mimem.clean.line_numbers import strip_line_numbers
 from mimem.clean.merge import merge_continuations
 from mimem.clean.sections import assign_sections
@@ -41,6 +44,7 @@ def clean(doc: Document, *, drop_empty: bool = True) -> Document:
         _drop_empty(doc)
     merge_continuations(doc)
     assign_sections(doc)
+    link_figures(doc)
     split_sentences(doc)
 
     doc.renumber()

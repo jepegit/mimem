@@ -4,11 +4,11 @@
       "document": "synthetic-paper.pdf",
       "lint_errors": 0,
       "lint_warnings": 4,
-      "rules_checked": 29,
+      "rules_checked": 30,
       "rules_skipped": 0,
-      "minutes": 7.6,
+      "minutes": 7.65,
       "budget_minutes": 10.0,
-      "budget_used": 0.76,
+      "budget_used": 0.765,
       "sections": 3,
       "segments": 4,
       "beats": 41,
@@ -20,20 +20,20 @@
       "grounded": 1.0,
       "values_kept": 1.0,
       "words_retained": 0.828,
-      "prompts_per_minute": 0.79
+      "prompts_per_minute": 0.784
     },
     {
       "document": "synthetic-sensor-paper.md",
       "lint_errors": 0,
-      "lint_warnings": 26,
-      "rules_checked": 29,
+      "lint_warnings": 25,
+      "rules_checked": 30,
       "rules_skipped": 0,
-      "minutes": 19.5,
-      "budget_minutes": 19.52,
-      "budget_used": 0.999,
+      "minutes": 19.22,
+      "budget_minutes": 19.29,
+      "budget_used": 0.996,
       "sections": 6,
       "segments": 12,
-      "beats": 91,
+      "beats": 89,
       "cards": 10,
       "gloss_coverage": 0.0,
       "concepts_spaced": 0.545,
@@ -42,7 +42,7 @@
       "grounded": 1.0,
       "values_kept": 1.0,
       "words_retained": 0.89,
-      "prompts_per_minute": 0.821
+      "prompts_per_minute": 0.832
     }
   ]
 }

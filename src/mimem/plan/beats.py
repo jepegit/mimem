@@ -148,6 +148,18 @@ def exposition_beats(
     twice, forty seconds apart.
     """
     skip = skip or set()
+    if block.kind is BlockKind.CAPTION and "caption" in block.attrs:
+        # A caption is the only text a listener can be given about a picture, so it is not read
+        # as prose -- "Chain side reactions during T R of lithium-ion batteries." arriving in the
+        # middle of a paragraph is a sentence about something the listener cannot see. Stage 2
+        # paired it with its figure; here it becomes that figure's announcement.
+        return _figure_beat(block, factory, patterns)
+
+    if block.parent_id and block.kind in {BlockKind.TABLE, BlockKind.FIGURE}:
+        # Its caption speaks for it (stage 2 paired them). Announcing it here as well would say
+        # "there is a table here" immediately before "there's a table here showing ...".
+        return []
+
     transformed = block.triage is not None and block.triage.action is TriageAction.TRANSFORM
     if transformed or block.kind in {
         BlockKind.TABLE,
@@ -202,6 +214,53 @@ def exposition_beats(
             flush()
     flush()
     return out
+
+
+def _figure_beat(
+    block: Block, factory: BeatFactory, patterns: dict[str, re.Pattern[str]]
+) -> list[Beat]:
+    """A figure or table, announced by what its caption says it shows.
+
+    "There is a figure here" tells the listener only that they have missed something. The
+    caption is the paper's own account of what the figure is about, it is already text, and it
+    costs nothing -- so the announcement carries it, and the listener knows whether the thing
+    they cannot see is worth opening the written notes for.
+
+    Still an announcement, not a description: nothing here claims to know what the figure
+    *shows*, only what it is *of*. Describing the content needs a vision model and the gate in
+    ``PLAN-figures.md`` section 4.
+    """
+    meta = block.attrs.get("caption", {})
+    subject = str(meta.get("subject", "")).strip()
+    label = "table" if meta.get("label") == "table" else "figure"
+    kind = BeatType.TABLE if label == "table" else BeatType.FIGURE
+
+    spoken = factory.speak(subject).rstrip(" .,;:") if subject else ""
+    text = (
+        f"There's a {label} here showing {spoken}. It's in the written notes."
+        if spoken
+        else f"There's a {label} here. It's in the written notes."
+    )
+    return [
+        factory.make(
+            kind,
+            text,
+            verbalize=False,
+            spans=[block.span()],
+            concept_ids=[cid for cid, p in patterns.items() if p.search(block.text)],
+            rules=["FIG-01" if label == "figure" else "TBL-02"],
+            written_text=_written(block, meta),
+            generated=False,
+        )
+    ]
+
+
+def _written(block: Block, meta: dict[str, object]) -> str:
+    """What study.md shows for a figure: the full caption, and whatever it speaks for."""
+    content = str(meta.get("content", "")).strip()
+    if not content:
+        return block.text
+    return block.text.strip() + "\n\n" + content
 
 
 def _non_prose_beat(

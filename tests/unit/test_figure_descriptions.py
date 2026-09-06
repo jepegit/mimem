@@ -277,3 +277,99 @@ def test_a_figure_with_no_crop_is_never_offered(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("MIMEM_WORKSPACE", str(tmp_path))
 
     assert server.next_figure("p1")[0]["remaining"] == 0
+
+
+# -- FIG-04: where a figure goes, and how its reference is said ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        # Deleting a subject-position reference leaves a verb-initial fragment. Two of these
+        # were in the audio track of a real paper: "exemplifies how transfer learning..."
+        ("Figure 6 exemplifies how transfer learning helps.", "The figure exemplifies how"),
+        ("Figure 3 shows the gas composition.", "The figure shows the gas"),
+        ("Table 2 lists every cell we tested.", "The table lists every cell"),
+        ("Figures 3-5 show the same effect.", "The figures show the same"),
+        # A section number points at something a listener cannot navigate to, and mimem's own
+        # parts are numbered differently, so it claims no direction either.
+        ("Section 3 illustrates the effectiveness.", "Another part of the paper illustrates"),
+    ],
+)
+def test_a_reference_in_subject_position_is_rewritten(
+    source: str, expected: str, study: Profile
+) -> None:
+    from mimem.verbalize import verbalize_text
+
+    spoken = verbalize_text(source, study)
+    assert expected in spoken
+    assert not any(c.isdigit() for c in spoken), "FIG-04: no figure number is ever spoken"
+
+
+def test_a_reference_in_passing_is_still_deleted(study: Profile) -> None:
+    """Mid-sentence it is an aside, and rewriting it would put a subject where none belongs."""
+    from mimem.verbalize import verbalize_text
+
+    spoken = verbalize_text("The trend is clear, as shown in Figure 4b, across all cells.", study)
+    assert spoken == "The trend is clear, across all cells."
+
+
+def test_a_sentence_does_not_start_in_lower_case_after_a_removal(study: Profile) -> None:
+    from mimem.verbalize import verbalize_text
+
+    assert verbalize_text("In Figure 3, capacity falls steadily.", study).startswith("Capacity")
+
+
+def test_a_figure_is_placed_where_the_prose_first_mentions_it() -> None:
+    """A caption lands where the typesetter had room -- up to seventy-five blocks after the
+    sentence that needs it in the paper this was written against."""
+    from mimem.plan.planner import _place_figures
+
+    blocks = [
+        Block(id="p1", kind=BlockKind.PARAGRAPH, text="Figure 3 shows the composition.", order=0),
+        Block(id="p2", kind=BlockKind.PARAGRAPH, text="Unrelated discussion.", order=1),
+        Block(id="p3", kind=BlockKind.PARAGRAPH, text="More discussion.", order=2),
+        Block(
+            id="c1",
+            kind=BlockKind.CAPTION,
+            text=CAPTION,
+            order=3,
+            attrs={"caption": {"label": "figure", "number": "3", "references": ["p1"]}},
+        ),
+    ]
+    assert [b.id for b in _place_figures(blocks)] == ["p1", "c1", "p2", "p3"]
+
+
+def test_a_figure_nobody_mentions_stays_where_it_is() -> None:
+    """One of eleven in the test paper. Reading order is the only answer available, which is
+    exactly why the rule needs a fallback rather than a rule."""
+    from mimem.plan.planner import _place_figures
+
+    blocks = [
+        Block(id="p1", kind=BlockKind.PARAGRAPH, text="Discussion.", order=0),
+        Block(
+            id="c1",
+            kind=BlockKind.CAPTION,
+            text=CAPTION,
+            order=1,
+            attrs={"caption": {"label": "figure", "number": "9", "references": []}},
+        ),
+    ]
+    assert [b.id for b in _place_figures(blocks)] == ["p1", "c1"]
+
+
+def test_a_figure_is_never_moved_backwards() -> None:
+    """A reference *after* the caption needs no move: the listener has already been told."""
+    from mimem.plan.planner import _place_figures
+
+    blocks = [
+        Block(
+            id="c1",
+            kind=BlockKind.CAPTION,
+            text=CAPTION,
+            order=0,
+            attrs={"caption": {"label": "figure", "number": "3", "references": ["p1"]}},
+        ),
+        Block(id="p1", kind=BlockKind.PARAGRAPH, text="Figure 3 shows it.", order=1),
+    ]
+    assert [b.id for b in _place_figures(blocks)] == ["c1", "p1"]

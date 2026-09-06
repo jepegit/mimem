@@ -225,7 +225,51 @@ def _section_groups(doc: Document) -> list[tuple[Block | None, list[Block]]]:
         current.append(block)
     if current:
         groups.append((heading, current))
-    return _merge_fragments(groups)
+    return _merge_fragments([(h, _place_figures(b)) for h, b in groups])
+
+
+def _place_figures(blocks: list[Block]) -> list[Block]:
+    """Rule FIG-04: a figure goes where the prose first mentions it, not where it sits.
+
+    A figure's caption lands wherever the typesetter had room -- in the paper this was written
+    against, between two and seventy-five blocks after the sentence that refers to it. On the
+    page that is fine, because a reader's eye crosses the gap in an instant. In audio it means
+    hearing about a figure a page and a half after the argument that needed it.
+
+    Only within the section, and only forwards. Every referenced figure in the test paper is
+    referred to from its own section and always *before* its caption, so a within-section move is
+    the whole of the problem; a cross-section move would be relocating a claim into a part of
+    the document that has not set it up yet.
+
+    A figure nobody refers to stays where it is. That is one of eleven in the test paper, and
+    reading order is the only answer available for it -- the fallback is worse than the rule,
+    which is exactly why the rule needs one.
+    """
+    order = {block.id: i for i, block in enumerate(blocks)}
+    moves: dict[str, str] = {}
+    for block in blocks:
+        meta = block.attrs.get("caption")
+        if not isinstance(meta, dict):
+            continue
+        targets = [ref for ref in meta.get("references", []) if ref in order]
+        if not targets:
+            continue
+        first = min(targets, key=lambda ref: order[ref])
+        if order[first] < order[block.id]:
+            moves[first] = block.id
+
+    if not moves:
+        return blocks
+    moved = set(moves.values())
+    out: list[Block] = []
+    by_id = {block.id: block for block in blocks}
+    for block in blocks:
+        if block.id in moved:
+            continue
+        out.append(block)
+        if block.id in moves:
+            out.append(by_id[moves[block.id]])
+    return out
 
 
 def _merge_fragments(

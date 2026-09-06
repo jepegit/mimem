@@ -164,10 +164,27 @@ than once, and the file ended up holding a different process's code than the one
 It looked like a failure and was a race. A test whose ground truth can be overwritten by the thing
 under test is not a test; the fix was a code per call, appended with a timestamp.
 
-### Stage D — placement and voice
+### Stage D — placement and voice — **done**
 
 `FIG-04`: the description goes at the **first reference in the prose**, not where the figure sits
 on the page, and the reference is rewritten so no figure number is spoken.
+
+**As built.** Both halves turned out to be one bug and one move.
+
+The *rewrite* half was not a nicety: deleting a subject-position reference takes the subject out
+of its sentence. "Figure 6 exemplifies how transfer learning..." was being spoken as
+"exemplifies how transfer learning...", and two such fragments were in the audio track of the
+test paper before anyone looked. A reference in subject position is now rewritten rather than
+removed — "The figure exemplifies" — while a reference in passing is still deleted, because
+rewriting *that* would put a subject where the sentence already has one. Sections get a different
+noun: "the section" points at something a listener cannot navigate to (`STR-08`), and mimem's own
+parts are numbered differently from the paper's, so "another part of the paper" claims no
+direction, which matters because the reference may point either way.
+
+The *placement* half is a within-section move, and the measurement is why it is that simple: all
+ten referenced figures in the test paper are referred to from their own section and always
+*before* the caption, between two and seventy-five blocks earlier. Seventy-five blocks is more
+than a page — the listener was hearing about a figure long after the argument that needed it.
 
 **And it needs a fallback, which the first draft of this plan did not have.** The test paper
 references its figures twelve times across nine of them — Figures 8 and 9 are never mentioned in

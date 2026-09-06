@@ -62,7 +62,63 @@ BARE_CROSS_REFERENCE = re.compile(
     re.IGNORECASE,
 )
 
+#: A figure that is the *subject* of its sentence: "Figure 6 exemplifies how...", "Table 2 lists".
+#:
+#: Rule ``FIG-04`` says a reference is rewritten so that no figure number is spoken -- and this
+#: is the shape that has to be rewritten rather than removed. Deleting it takes the subject out
+#: of the sentence and leaves a verb-initial fragment, which is not a hypothetical: "exemplifies
+#: how transfer learning combined with Shapley additive explanations analysis..." was in the
+#: audio track of a real paper, spoken exactly like that.
+#:
+#: Only at a sentence boundary, and only when a verb follows. Mid-sentence the reference is an
+#: aside and :data:`CROSS_REFERENCE` is right to delete it.
+SUBJECT_REFERENCE = re.compile(
+    r"(?:(?<=^)|(?<=[.!?]\s)|(?<=[.!?]\s\s))"
+    r"(?P<label>Fig(?:ure|s)?|Figures|Tables?|Schemes?|Sect(?:ion)?s?)\.?\s*"
+    r"(?P<number>\d+(?:\.\d+)*[a-z]?(?:\s*[-–]\s*\d+(?:\.\d+)*[a-z]?)?)\s+"
+    r"(?=[a-z])",
+    re.IGNORECASE,
+)
+
 _ET_AL = re.compile(r"\bet\s+al\.?", re.IGNORECASE)
+
+
+def _recapitalise(text: str, original: str) -> str:
+    """Restore a capital that a removal took away, and only then.
+
+    "In Figure 3, capacity falls" becomes "Capacity falls", because an engine reads a lower-case
+    opening as a continuation of whatever came before it. But this module is also called on
+    *fragments* -- a clause lifted out of a sentence, which was lower-case to begin with and
+    should stay that way. So the test is not "does it start lower-case", it is "did it start
+    upper-case and stop".
+    """
+    if not text or not original:
+        return text
+    if original[:1].isupper() and text[:1].islower():
+        text = text[0].upper() + text[1:]
+    return re.sub(r"([.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+
+
+def _as_subject(match: re.Match[str]) -> str:
+    """ "Figure 6 exemplifies" -> "The figure exemplifies"; the plural stays plural.
+
+    A *section* gets a different noun. "The section" would point at something the listener cannot
+    navigate to, which is what ``STR-08`` exists to prevent, and the paper's own numbering does
+    not match the parts mimem counts out loud. "Another part of the paper" claims no direction,
+    which matters because the reference may point forwards or back and this cannot tell which.
+    """
+    label = match.group("label").lower().rstrip(".")
+    if label.startswith("sect"):
+        return "Another part of the paper "
+    plural = match.group("number").count("-") or (label.endswith("s") and label != "figures")
+    noun = (
+        "table"
+        if label.startswith("table")
+        else "scheme"
+        if label.startswith("scheme")
+        else "figure"
+    )
+    return f"The {noun}s " if plural else f"The {noun} "
 
 
 def _attribute(match: re.Match[str]) -> str:
@@ -144,6 +200,7 @@ def verbalize_citations(
     marker sits after a full stop and so needs the expansion to "and colleagues" to have
     happened before the lower-case-letter guard can see it.
     """
+    original = text
     text = strip_identifiers(text)
 
     if verbosity is CitationVerbosity.ATTRIBUTED:
@@ -162,6 +219,9 @@ def verbalize_citations(
 
     text = NUMERIC_CITATION.sub("", text)
     if drop_cross_references:
+        # Rewrite before deleting. A subject-position reference matches CROSS_REFERENCE too, and
+        # whichever runs first decides whether the sentence keeps a subject.
+        text = SUBJECT_REFERENCE.sub(_as_subject, text)
         text = CROSS_REFERENCE.sub("", text)
         text = BARE_CROSS_REFERENCE.sub("", text)
 
@@ -178,6 +238,7 @@ def verbalize_citations(
     # A removal at the start of a sentence leaves the comma that separated it from the rest.
     text = re.sub(r"^\s*,\s*", "", text)
     text = re.sub(r"([.!?])\s*,\s*", r"\1 ", text)
+    text = _recapitalise(text, original)
     text = re.sub(r"([(\[])\s+", r"\1", text)
     text = re.sub(r"\s{2,}", " ", text)
     return text.strip()

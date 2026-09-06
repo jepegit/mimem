@@ -769,6 +769,11 @@ index), and the missing equations above.
 *Not done:* layers 2 and 3 of §8. `gloss_coverage` sits at zero on every local build, because
 without stage 6 no term is ever defined — a real gap, now visible as a number.
 
+**Known, not fixed: sentences that begin in lower case.** 31 of them in a 143-minute programme
+built from a real review, down from 44 once subject-position figure references were rewritten
+rather than deleted. The rest begin mid-clause because something upstream removed their opening,
+and an engine reads a lower-case start as a continuation of the beat before it.
+
 **Known, not fixed: two headings can merge into one section title.** On a 98-page review, stage
 2's paragraph rejoining merged a heading with the one following it in 2 of 26 sections, giving
 "2.3. Core ML Models and Training Strategies 2.3.1. Model Architectures and General Workflow".

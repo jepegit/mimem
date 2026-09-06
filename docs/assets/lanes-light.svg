@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 462" width="900" height="462" role="img" aria-labelledby="t d">
+<title id="t">Three ways through the same paragraph</title>
+<desc id="d">Reading is a line with arrows looping backwards to re-read, jump back and picture something. Listening is the same line with the words behind the playhead fading away and no way back. mimem is the same line with a concrete image, a question followed by a pause, and forward arcs bringing an idea back at growing intervals. The caption reads: you cannot loop back, so the text loops forward.</desc>
+<rect width="900" height="462" fill="#faf7f2"/>
+<defs><marker id="h-light" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6b635a"/></marker><marker id="c-light" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b4541f"/></marker><marker id="f-light" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c8c0b5"/></marker></defs><text x="36" y="42" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="20" font-weight="700" font-style="normal" letter-spacing="0" fill="#1c1a17" text-anchor="start">Three ways through the same paragraph</text>
+<text x="36" y="104" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" font-style="normal" letter-spacing="0" fill="#1c1a17" text-anchor="start">Reading</text>
+<text x="36" y="124" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#6b635a" text-anchor="start">you control the rate</text>
+<line x1="150" y1="108" x2="858" y2="108" stroke="#6b635a" stroke-width="2" marker-end="url(#h-light)"/>
+<path d="M 300 104 C 255.0 62, 255.0 62, 210 104" fill="none" stroke="#6b635a" stroke-width="1.6" marker-end="url(#h-light)"/>
+<text x="255.0" y="74" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#6b635a" text-anchor="middle">re-read</text>
+<path d="M 520 104 C 425.0 62, 425.0 62, 330 104" fill="none" stroke="#6b635a" stroke-width="1.6" marker-end="url(#h-light)"/>
+<text x="425.0" y="74" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#6b635a" text-anchor="middle">jump back</text>
+<path d="M 760 104 C 725.0 62, 725.0 62, 690 104" fill="none" stroke="#6b635a" stroke-width="1.6" marker-end="url(#h-light)"/>
+<text x="725.0" y="74" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#6b635a" text-anchor="middle">picture it</text>
+<text x="36" y="228" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" font-style="normal" letter-spacing="0" fill="#1c1a17" text-anchor="start">Listening</text>
+<text x="36" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#6b635a" text-anchor="start">each word gone as it is spoken</text>
+<line x1="150" y1="232" x2="858" y2="232" stroke="#6b635a" stroke-width="2" marker-end="url(#h-light)"/>
+<rect x="174" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.25"/>
+<rect x="208" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.32"/>
+<rect x="242" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.39"/>
+<rect x="276" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.46"/>
+<rect x="310" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.53"/>
+<rect x="344" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.60"/>
+<rect x="378" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.67"/>
+<rect x="412" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.74"/>
+<rect x="446" y="212" width="22" height="4" rx="2" fill="#c8c0b5" opacity="0.81"/>
+<path d="M 490 198 L 400 198" fill="none" stroke="#c8c0b5" stroke-width="1.4" marker-end="url(#f-light)" stroke-dasharray="3 3"/>
+<text x="498" y="202" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="italic" letter-spacing="0" fill="#c8c0b5" text-anchor="start">no way back</text>
+<text x="36" y="352" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" font-style="normal" letter-spacing="0" fill="#1c1a17" text-anchor="start">mimem</text>
+<text x="36" y="372" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#6b635a" text-anchor="start">the loops are built into the text</text>
+<line x1="150" y1="356" x2="858" y2="356" stroke="#1c1a17" stroke-width="2" marker-end="url(#c-light)"/>
+<circle cx="350" cy="356" r="13" fill="#f2e2d6" stroke="#b4541f"/>
+<text x="350" y="361" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="15" font-weight="700" font-style="normal" letter-spacing="0" fill="#b4541f" text-anchor="middle">?</text>
+<rect x="365" y="351" width="46" height="10" rx="5" fill="#f2e2d6" stroke="#b4541f" stroke-dasharray="3 3"/>
+<text x="388" y="390" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#b4541f" text-anchor="middle">pause</text>
+<rect x="239" y="345" width="22" height="22" rx="4" fill="#f2e2d6" stroke="#b4541f"/>
+<circle cx="247" cy="353" r="3" fill="#b4541f"/>
+<path d="M 242 363 L 249 355 L 258 363 Z" fill="#b4541f"/>
+<text x="250" y="390" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#b4541f" text-anchor="middle">a picture</text>
+<path d="M 480 350 C 535.0 298, 535.0 298, 590 350" fill="none" stroke="#b4541f" stroke-width="1.8" marker-end="url(#c-light)"/>
+<path d="M 590 350 C 695.0 298, 695.0 298, 800 350" fill="none" stroke="#b4541f" stroke-width="1.8" marker-end="url(#c-light)"/>
+<text x="640" y="304" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#b4541f" text-anchor="middle">it comes back, further apart each time</text>
+<text x="36" y="432" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="17" font-weight="400" font-style="italic" letter-spacing="0" fill="#1c1a17" text-anchor="start">You cannot loop back, so the text loops forward.</text>
+</svg>

@@ -17,7 +17,14 @@
   --mimem-parchment: #faf7f2;
 }
 
-[data-md-color-scheme="default"] {
+/* The attribute selector is written twice on purpose, and removing the repeat will silently
+ * turn every link back to the theme's blue.
+ *
+ * The theme sets --md-typeset-a-color under `[data-md-color-scheme=slate][data-md-color-primary=indigo]`
+ * — two attributes, so specificity (0,2,0). A single `[data-md-color-scheme="slate"]` is (0,1,0)
+ * and loses regardless of load order. Doubling ours matches the specificity, and extra.css is
+ * loaded last, so ours wins. */
+[data-md-color-scheme="default"][data-md-color-scheme] {
   --md-primary-fg-color: var(--mimem-ink);
   --md-primary-fg-color--light: #3a352e;
   --md-primary-fg-color--dark: #100f0d;
@@ -26,7 +33,7 @@
   --md-typeset-a-color: var(--mimem-copper);
 }
 
-[data-md-color-scheme="slate"] {
+[data-md-color-scheme="slate"][data-md-color-scheme] {
   --md-hue: 232;
   --md-primary-fg-color: #16151a;
   --md-accent-fg-color: var(--mimem-copper-light);

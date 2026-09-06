@@ -139,9 +139,18 @@ vision-capable, already writing the glosses — writes the description and retur
 `apply_elaborations`. This is the trick that made stage 6 free, applied to the one task that
 would otherwise make a vision model a hard dependency.
 
-*(Still to verify before building: that Claude Desktop puts a tool result's image into the
-model's context rather than only rendering it for the user. The SDK supporting the type is not
-the same claim. If that is false the conversation path does not work — see §6.)*
+**Verified, 2026-09-06.** A throwaway MCP server returned an image containing a random six-digit
+code, with text that did not contain it. Claude Desktop's model read the code back correctly. The
+number existed nowhere but in the pixels, and guessing a particular six-digit number is one
+chance in nine hundred thousand, so tool-result images do reach the model.
+
+Two things the run showed beyond the headline. The code was rendered as *small* text — a default
+font on a 520-pixel canvas, barely legible in the chat thumbnail — and was still read correctly,
+which says a 100 dpi figure crop is comfortably within reach. And the harness lied before the
+system did: the probe wrote one code per *process* to a file, the host started the server more
+than once, and the file ended up holding a different process's code than the one that answered.
+It looked like a failure and was a race. A test whose ground truth can be overwritten by the thing
+under test is not a test; the fix was a code per call, appended with a timestamp.
 
 ### Stage D — placement and voice
 
@@ -214,7 +223,7 @@ wrong strictly loses a figure entirely.
 
 | Risk | Mitigation |
 |---|---|
-| The MCP host does not put tool-result images into the model's context | **The one unverified assumption.** Check it before writing stage C. If false, stages A and B still ship and stage C waits for API-only use |
+| ~~The MCP host does not put tool-result images into the model's context~~ | **Verified false** — images reach the model (§3). This was the assumption stage C rested on |
 | Region pairing grabs the wrong rectangle | Crops are written to disk and linked from `study.md`, so a wrong crop is visible rather than silent. A lint rule can check that every described figure's crop is non-empty and inside the page |
 | A confidently wrong description | §4, and the card rule in particular |
 | The cache serves one figure's description for another | The digest change in §3, and a test that two figures in one document produce two digests |
@@ -283,7 +292,10 @@ above it at all. Rendering one would produce a picture of words.
 nearest text block" became "take blocks above the caption, stop at the first non-figure", which
 was then checked against every figure in the paper and works on all of them.
 
-One assumption survived unverified, and it is flagged as such in §3 and §6: `mcp.types.
-ImageContent` exists in the pinned SDK, but whether Claude Desktop puts a tool result's image
-into the *model's* context — rather than only showing it to the user — is not something the SDK
-can tell us. Stage C rests on it. Stages A and B do not.
+One assumption survived the review unverified: `mcp.types.ImageContent` exists in the pinned SDK,
+but whether Claude Desktop puts a tool result's image into the *model's* context — rather than
+only showing it to the user — is not something the SDK can tell us.
+
+It has since been tested, and it holds (§3). Which is the argument for having written it down as
+an assumption rather than as a plan: it took twenty minutes to settle, and had it gone the other
+way it would have invalidated a third of this document.

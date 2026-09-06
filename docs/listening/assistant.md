@@ -18,24 +18,25 @@ You need Python 3.11+, [uv](https://docs.astral.sh/uv/), and the app.
 
 === "Claude Desktop"
 
-    Open **Settings → Developer → Edit Config**, and add mimem to `mcpServers`:
+    Download **[mimem.mcpb](https://github.com/jepegit/mimem/releases/latest/download/mimem.mcpb)**,
+    then **Settings → Extensions → Install extension** and pick the file. Or drag it onto the
+    Claude Desktop window.
 
-    ```json
-    {
-      "mcpServers": {
-        "mimem": {
-          "command": "uvx",
-          "args": [
-            "--from", "git+https://github.com/jepegit/mimem",
-            "--with", "mcp",
-            "mimem-mcp"
-          ]
-        }
-      }
-    }
+    That is the whole install. The extension's settings let you choose where programmes are
+    written and point at a `listener.yaml`, without editing any JSON.
+
+    !!! warning "Do not edit `claude_desktop_config.json`"
+
+        Older instructions — including this page's, until recently — told you to add mimem to
+        `mcpServers` in that file. On current Claude Desktop the application owns it and rewrites
+        it when it exits, so a server added by hand disappears on the next start, silently and
+        with no error. Extensions are the supported route.
+
+    Building it yourself, from a clone:
+
+    ```bash
+    uv run python packaging/build_extension.py
     ```
-
-    Restart Claude Desktop. mimem's tools appear under the connectors icon.
 
 === "ChatGPT Desktop"
 
@@ -50,16 +51,14 @@ You need Python 3.11+, [uv](https://docs.astral.sh/uv/), and the app.
 
 === "Already cloned it"
 
+    Point the extension at your clone instead of at GitHub by editing `packaging/manifest.json`
+    before building — set `server.mcp_config` to:
+
     ```json
-    {
-      "mcpServers": {
-        "mimem": {
-          "command": "uv",
-          "args": ["run", "--directory", "/path/to/mimem", "mimem-mcp"]
-        }
-      }
-    }
+    { "command": "uv", "args": ["run", "--directory", "/path/to/mimem", "mimem-mcp"] }
     ```
+
+    Then `uv run python packaging/build_extension.py` and install the result.
 
 === "Claude Code"
 

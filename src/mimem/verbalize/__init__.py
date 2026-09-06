@@ -30,7 +30,12 @@ from mimem.verbalize.numbers import (
     verbalize_numbers,
 )
 from mimem.verbalize.parens import verbalize_parentheticals
-from mimem.verbalize.symbols import apply_lexicon, verbalize_indices, verbalize_symbols
+from mimem.verbalize.symbols import (
+    apply_lexicon,
+    normalize,
+    verbalize_indices,
+    verbalize_symbols,
+)
 from mimem.verbalize.units import is_unit, spoken_unit
 
 __all__ = [
@@ -39,6 +44,7 @@ __all__ = [
     "digits_to_words",
     "int_to_words",
     "is_unit",
+    "normalize",
     "number_to_words",
     "ordinal_to_words",
     "spoken_unit",
@@ -75,6 +81,10 @@ def verbalize_text(
     """Run the deterministic verbalization pipeline over a piece of prose."""
     if not text.strip():
         return ""
+    # Before anything reads a character: fold the look-alikes, so that every stage below sees
+    # one spelling of each symbol. Subscript digits are the case that matters -- they have to
+    # become digits before the number verbalizer runs, or they reach the audio track as digits.
+    text = normalize(text)
     # The listener's lexicon goes first, before anything else can claim a token. Rule SYM-03
     # says a domain term wins over every default, and it cannot win if the number verbalizer
     # has already turned "NMC811" into "NMC eight one one" on its own terms.

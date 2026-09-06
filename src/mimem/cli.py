@@ -7,6 +7,9 @@ afterthought -- it is how you find out that ingestion quietly ate the methods se
 
 from __future__ import annotations
 
+import contextlib
+import io
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Annotated
@@ -54,8 +57,32 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-console = Console()
-err = Console(stderr=True)
+
+
+def _speakable_console(*, stderr: bool = False) -> Console:
+    """A console that cannot be killed by the text it is asked to print.
+
+    Windows terminals still default to cp1252, which has no code point for most of what a
+    scientific PDF contains. A single U+2206 in a ninety-eight page review was enough to end
+    ``mimem build`` in a ``UnicodeEncodeError`` traceback -- and the character was in a *lint
+    violation*, so the crash landed exactly where the tool was trying to say what was wrong
+    with the document. The artefacts had already been written; only the report died.
+
+    Replacing the unencodable character costs a "?" in a terminal that could not have shown the
+    real one anyway. Set on the CLI's own consoles rather than by reconfiguring ``sys.stdout``,
+    because the MCP server shares this process family and nothing may touch its stdout.
+    """
+    stream = sys.stderr if stderr else sys.stdout
+    # Not every stdout is a real one: pytest and the notebook capture replace it with objects
+    # that have no encoding to reconfigure, and there is nothing to fix in those.
+    if isinstance(stream, io.TextIOWrapper):
+        with contextlib.suppress(ValueError, OSError):
+            stream.reconfigure(errors="replace")
+    return Console(stderr=stderr)
+
+
+console = _speakable_console()
+err = _speakable_console(stderr=True)
 
 
 def _fail(message: str) -> None:

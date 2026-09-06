@@ -769,6 +769,13 @@ index), and the missing equations above.
 *Not done:* layers 2 and 3 of §8. `gloss_coverage` sits at zero on every local build, because
 without stage 6 no term is ever defined — a real gap, now visible as a number.
 
+**Known, not fixed: two headings can merge into one section title.** On a 98-page review, stage
+2's paragraph rejoining merged a heading with the one following it in 2 of 26 sections, giving
+"2.3. Core ML Models and Training Strategies 2.3.1. Model Architectures and General Workflow".
+The output is speakable and breaks no rule, so it is a quality defect rather than a failure; the
+fix is in the column- and page-break heuristics, where a change risks every document that
+currently works. Worth doing deliberately, with the corpus grown first.
+
 **M7 — TTS handoff (0.5 week).** Chunked output with stable IDs, an ElevenLabs-shaped adapter and a
 local-engine adapter (Piper/Kokoro) for cheap iteration, break-marker rendering. *Done when:* one
 document goes from PDF to a playable audio file in one command — the bridge into Part 2.

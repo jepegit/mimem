@@ -198,11 +198,44 @@ Four layers, weakest to strongest:
    This costs nothing a listener had. Audio cannot carry a four-decimal percentage anyway — that
    is what `NUM-01`'s chunking exists for — and the exact values are in `study.md` and on the
    crop, where a reader can check them against the picture rather than take them on trust.
+   **Measured, on Figure 3 of the test paper.** A vision-capable model was given the crop alone
+   and asked to describe it. The structure came back right — four pie charts, a shared legend, an
+   inset for the small slices — and the substance came back inverted:
+
+   | Claimed | Actually |
+   |---|---|
+   | "C₂H₄ (~23%) also substantial" in panel (a) | C₂H₄ is **0.09%**, a sliver; 23.35% is **H₂** |
+   | "the inset shows H₂ at ~8%" | the inset holds only the sub-1% traces (0.01, 0.5, 4.27) |
+   | "H₂ in the inset is around 5–7%" (panel b) | that inset is 0.01, 0.52, 0.62 — an order of magnitude out |
+   | "CO now clearly dominates (~69%)" (panel c) | **60.27%**, stated with a tilde that reads as careful rounding |
+
+   H₂ and C₂H₄ are swapped throughout, which inverts the chemistry: hydrogen is a major product
+   and ethylene a trace, and the description says the reverse — in a paper whose argument is that
+   gas composition is an early-warning fingerprint.
+
+   Eleven of its fourteen numeric claims are rejected by the gate. The three that survive do so
+   by **coincidence**: `35` matches the citation `[35]`, `10` and `5` match "10 to 60 min" and
+   "5–15 min" in the referencing sentence. Which is the argument for the rule above rather than
+   for the gate alone — a compliant description states none of those numbers, so all fourteen
+   go.
+
+   Two things this does not catch, and one it need not. The **legend misread is not a number
+   error**: a description saying "ethylene dominates" when it is hydrogen passes every check
+   here, and that is the strongest argument for layer 4 below. And the model, given the image
+   alone, invented a framing — "different cycling stages or temperatures" — when the caption
+   says the panels are four cathode chemistries. That one is designed out already:
+   `tasks.figure()` passes the caption and the referencing sentences, and this run is evidence
+   that doing so is load-bearing rather than polite.
+
 3. **Confidence degrades to caption-only.** Already designed as `FIG-07`, already a required
    schema field. A description written from the caption alone should say so and then not be
    spoken as fact.
 4. **No card may take its answer from a figure description.** This is the rule I would not ship
-   without. A wrong description spoken once is a wrong sentence. A wrong description turned into
+   without, and the run above is why it is not merely prudent. The legend misread — hydrogen and
+   ethylene swapped — is invisible to every other layer here: no number is wrong, no direction is
+   reversed, and the sentence is fluent. It would reach the listener. As one spoken sentence,
+   attributed to a figure they can open in `study.md`, that is a cost worth the rest of the
+   feature. As a card, it is that error rehearsed at expanding intervals until they believe it. A wrong description spoken once is a wrong sentence. A wrong description turned into
    a spaced-repetition card is a wrong fact rehearsed at expanding intervals — mimem using the
    largest effect in the learning literature to teach an error. The cost of the rule is a few
    cards; the cost of not having it is the worst failure the system can produce.

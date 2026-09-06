@@ -118,7 +118,7 @@ manifest, and link them from `study.md`. That last part has value with or withou
 description: the written companion currently tells you a figure exists and makes you go back to
 the PDF.
 
-### Stage C — description, two paths, one schema
+### Stage C — description, two paths, one schema — **done**
 
 Both paths produce a `FigureOut` and pass through the same gate. Neither is a fallback for the
 other; they are the two places mimem runs.
@@ -131,6 +131,18 @@ alongside the instruction. Two details that will bite if they are missed:
   cache and the fixture store would serve figure 3's description for figure 7, and the output
   would look perfectly plausible. This is the single most dangerous line in the whole plan.
 - The cost model must price images as volatile suffix tokens, not as cached prefix.
+
+**As built.** `mimem.elaborate.figures` holds the task, the gate and the spoken form; the
+description is stored on its caption block, because a figure belongs to a place in the document
+rather than to a concept. The API path sends the crop with the instruction; the conversation path
+has a tool of its own, `next_figure`, which hands over one crop at a time — a figure is answered
+with a `figure_id` rather than a `concept_id`, and it returns an image, so neither half fitted
+the concept-shaped `elaboration_plan`.
+
+Two bugs found by running it rather than by reading it. `FIG-01`'s lint rule spelled its figure
+kinds in the singular, so `chart` failed "four pie charts" — a compliant description of a
+real figure. And it required the word "axis" of everything, which a pie chart does not have and
+a micrograph does not have; it now accepts shares, slices, categories and a scale bar.
 
 **The conversation path.** MCP tool results can carry image content — `mcp.types.ImageContent`
 takes base64 `data` and a `mimeType`, and it is in the SDK version already pinned. So

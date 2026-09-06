@@ -22,6 +22,7 @@ than a confident silence. Validate it with one small document before pointing it
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from abc import ABC, abstractmethod
@@ -69,13 +70,25 @@ class Request:
     effort: str = EFFORT_LOW
     max_tokens: int = 1024
     meta: dict[str, str] = field(default_factory=dict)
+    #: PNG bytes to send alongside the instruction, for the tasks that describe a picture.
+    #:
+    #: Not part of the cached prefix: an image is volatile suffix, and the cost model prices it
+    #: as one. And it *is* part of the digest -- see :meth:`digest`, where leaving it out is the
+    #: most dangerous single omission available in this file.
+    images: tuple[bytes, ...] = ()
 
     def digest(self) -> str:
         """Content address for the cache and the fixture store (PLAN section 4, stage 6).
 
         Keyed on everything that can change the answer: the task, the whole prompt, the model,
-        and the schema. A schema change invalidates the cache, which is what you want -- an old
-        answer validated against a different shape is not a hit.
+        the schema, **and the image**. A schema change invalidates the cache, which is what you
+        want -- an old answer validated against a different shape is not a hit.
+
+        The image matters more than the rest of it put together. Every figure in a document
+        produces a request with the same task, the same system prompt, the same document and
+        very nearly the same instruction; the picture is the only thing that differs. Hash the
+        text alone and the cache serves figure three's description for figure seven -- fluent,
+        plausible, about the wrong picture, and with nothing downstream able to notice.
         """
         h = hashlib.blake2s(digest_size=16)
         for part in (
@@ -88,6 +101,9 @@ class Request:
             json.dumps(self.schema.model_json_schema(), sort_keys=True),
         ):
             h.update(part.encode("utf-8", errors="replace"))
+            h.update(b"\x1f")
+        for image in self.images:
+            h.update(hashlib.blake2s(image, digest_size=16).digest())
             h.update(b"\x1f")
         return h.hexdigest()[:16]
 
@@ -228,6 +244,30 @@ class RecordingClient(BaseClient):
         return response
 
 
+def _message_content(request: Request) -> Any:
+    """The user turn: the instruction, and the picture when the task is about one.
+
+    The image goes *before* the instruction. The instruction ends by asking for an honest
+    confidence, and a model that has already been shown what it is judging answers that better
+    than one asked to hold the question and then look.
+    """
+    if not request.images:
+        return request.instruction
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": base64.b64encode(image).decode("ascii"),
+            },
+        }
+        for image in request.images
+    ]
+    blocks.append({"type": "text", "text": request.instruction})
+    return blocks
+
+
 class AnthropicClient(BaseClient):
     """The live one. **Never exercised** -- see the module docstring.
 
@@ -268,7 +308,7 @@ class AnthropicClient(BaseClient):
                     "cache_control": {"type": "ephemeral"},
                 },
             ],
-            messages=[{"role": "user", "content": request.instruction}],
+            messages=[{"role": "user", "content": _message_content(request)}],
             tools=[
                 {
                     "name": "answer",

@@ -227,7 +227,9 @@ Passage:
     )
 
 
-def figure(caption: str, references: list[str], document: str) -> Request:
+def figure(
+    caption: str, references: list[str], document: str, image: bytes | None = None
+) -> Request:
     """Describe a figure (rules FIG-01, FIG-02, FIG-03, FIG-07).
 
     *Degrades to:* the caption alone, verbalized. Below the confidence threshold it degrades the
@@ -263,6 +265,7 @@ data, that is low confidence, and low confidence means the description will not 
         schema=FigureOut,
         effort=EFFORT_HIGH,
         max_tokens=800,
+        images=(image,) if image else (),
     )
 
 

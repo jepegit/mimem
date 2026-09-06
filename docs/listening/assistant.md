@@ -83,6 +83,20 @@ It builds, and tells you how long the programme is, how it is structured, what i
 ideas are, and whether anything failed the design rules. Nothing is uploaded anywhere; the files
 land in `~/mimem/programmes/`.
 
+> **Show me the figures**
+
+If the paper is a PDF, mimem has cropped each figure out of the page. `next_figure` hands one
+over as an image, you describe it, and the description is checked before it is spoken — the same
+gate the glosses face, plus one rule of its own: **a description may not quote a value the paper
+never wrote in a sentence.** Numbers read off a plot cannot be checked against anything, so they
+are rejected whether they are right or wrong. "Well over half", not "sixty point two seven
+percent". The exact values stay in `study.md`, next to the picture, where you can check them.
+
+That rule is not caution. Given a real four-panel figure, a vision model returned a fluent
+description with two gases swapped and a 60.27% label read as "~69%" — so no retrieval card ever
+takes its answer from a figure description either. One wrong spoken sentence is a cost worth the
+feature; the same sentence drilled at expanding intervals is not.
+
 > **Now write the explanations yourself**
 
 This is the good part. The assistant fetches the concepts that want explaining, along with the

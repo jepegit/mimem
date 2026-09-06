@@ -105,6 +105,7 @@ class BeatFactory:
         generator: str | None = None,
         written_text: str | None = None,
         card_id: str | None = None,
+        provenance: Provenance | None = None,
     ) -> Beat:
         spoken = self._closed(self.speak(text) if verbalize else text)
         digest_key = f"{beat_type}:{spoken}"
@@ -122,7 +123,11 @@ class BeatFactory:
             est_seconds=self.profile.seconds_for(spoken),
             pause_after=pause_after,
             generated=is_generated,
-            provenance=Provenance(generator=generator or "template") if is_generated else None,
+            # An explicit provenance wins: a figure description is written by a model and has to
+            # say so in the manifest (rule FIG-07), but it is not *generated* in the VOI-02
+            # sense -- it describes the paper's own picture and carries the span to prove it.
+            provenance=provenance
+            or (Provenance(generator=generator or "template") if is_generated else None),
             card_id=card_id,
         )
 
@@ -226,31 +231,46 @@ def _figure_beat(
     costs nothing -- so the announcement carries it, and the listener knows whether the thing
     they cannot see is worth opening the written notes for.
 
-    Still an announcement, not a description: nothing here claims to know what the figure
-    *shows*, only what it is *of*. Describing the content needs a vision model and the gate in
-    ``PLAN-figures.md`` section 4.
+    When stage 6 has described the figure *and* the description passed the gate, that is spoken
+    instead -- in the order rule ``FIG-01`` asks for. Otherwise the announcement stands, which is
+    what every local build gets and is never worse than saying nothing.
     """
+    from mimem.elaborate.figures import described
+    from mimem.elaborate.figures import spoken as describe
+
     meta = block.attrs.get("caption", {})
     subject = str(meta.get("subject", "")).strip()
     label = "table" if meta.get("label") == "table" else "figure"
     kind = BeatType.TABLE if label == "table" else BeatType.FIGURE
 
-    spoken = factory.speak(subject).rstrip(" .,;:") if subject else ""
-    text = (
-        f"There's a {label} here showing {spoken}. It's in the written notes."
-        if spoken
-        else f"There's a {label} here. It's in the written notes."
-    )
+    description = described(block) if label == "figure" else None
+    if description is not None:
+        # Already checked before it was stored, and written in the template order, so it goes
+        # through the verbalizers unchanged rather than being reassembled here.
+        text = describe(description)
+        rules = ["FIG-01", "FIG-03", "FIG-07"]
+    else:
+        spoken = factory.speak(subject).rstrip(" .,;:") if subject else ""
+        text = (
+            f"There's a {label} here showing {spoken}. It's in the written notes."
+            if spoken
+            else f"There's a {label} here. It's in the written notes."
+        )
+        rules = ["FIG-01" if label == "figure" else "TBL-02"]
+
     return [
         factory.make(
             kind,
             text,
-            verbalize=False,
+            verbalize=description is not None,
             spans=[block.span()],
             concept_ids=[cid for cid, p in patterns.items() if p.search(block.text)],
-            rules=["FIG-01" if label == "figure" else "TBL-02"],
+            rules=rules,
             written_text=_written(block, meta),
             generated=False,
+            provenance=(
+                Provenance(generator="figure", verified=True) if description is not None else None
+            ),
         )
     ]
 

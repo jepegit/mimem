@@ -52,10 +52,40 @@ def price_for(model: str) -> tuple[float, float]:
     return max(PRICES.values(), key=lambda p: p[0])
 
 
+def image_tokens(png: bytes) -> int:
+    """Roughly what an image costs, from its pixel dimensions.
+
+    Anthropic's own approximation is width x height / 750. The dimensions come out of the PNG
+    header rather than by decoding the image, because this runs in ``--dry-run`` where the point
+    is to answer before spending anything.
+
+    Priced as *suffix*, never as cached prefix: an image is the one part of a figure request that
+    differs between figures, so it is exactly what the cache cannot serve.
+    """
+    if len(png) < 24 or png[:8] != PNG_MAGIC:
+        return DEFAULT_IMAGE_TOKENS
+    width = int.from_bytes(png[16:20], "big")
+    height = int.from_bytes(png[20:24], "big")
+    if not width or not height:
+        return DEFAULT_IMAGE_TOKENS
+    return max(1, width * height // 750)
+
+
+#: What an unreadable image is assumed to cost: a full-width crop at the resolution stage B
+#: renders at. Guessing low would make a dry run understate a figure-heavy paper.
+DEFAULT_IMAGE_TOKENS = 500
+
+#: The PNG signature, spelled with escapes. Written as literal bytes it has twice been corrupted
+#: by a shell heredoc on the way into this file -- see AGENTS.md.
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
 def estimate(request: Request, *, cached_prefix: bool = False, batch: bool = False) -> float:
     """Estimated dollars for one request."""
     prefix = estimate_tokens(request.system) + estimate_tokens(request.document)
-    suffix = estimate_tokens(request.instruction)
+    suffix = estimate_tokens(request.instruction) + sum(
+        image_tokens(image) for image in request.images
+    )
     output = request.max_tokens // 2  # tasks return a sentence or two, not a full budget
 
     input_price, output_price = price_for(request.model)

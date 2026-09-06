@@ -23,6 +23,7 @@ reason it is safe to let the conversation do stage 6.
 
 from __future__ import annotations
 
+import base64
 import json
 import sys
 from datetime import UTC, datetime
@@ -30,6 +31,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from mcp.server import MCPServer
+from mcp.types import ImageContent
 from pydantic import BaseModel, Field
 
 from mimem import __version__
@@ -37,8 +39,9 @@ from mimem.assistant import review as review_module
 from mimem.assistant.workspace import SourceError, Workspace, build
 from mimem.config import Listener, Profile, Settings, load_listener, load_profile
 from mimem.elaborate import GROUNDING_KINDS, ground, store
+from mimem.elaborate.figures import MIN_CONFIDENCE as MIN_FIGURE_CONFIDENCE
 from mimem.ir import Concept, ConceptRegistry, Document, Script
-from mimem.llm.schemas import AnalogyOut, AnchorOut, GlossOut, WhyOut
+from mimem.llm.schemas import AnalogyOut, AnchorOut, FigureOut, GlossOut, WhyOut
 from mimem.llm.tasks import SYSTEM, analogy, anchor, gloss, why
 from mimem.pipeline import replan
 from mimem.plan.support import gather
@@ -57,7 +60,11 @@ TASK_SCHEMAS: dict[str, type[BaseModel]] = {
     "anchor": AnchorOut,
     "analogy": AnalogyOut,
     "why": WhyOut,
+    "figure": FigureOut,
 }
+
+#: Tasks that belong to a figure rather than to a concept, and are answered with a ``figure_id``.
+FIGURE_TASKS = frozenset({"figure"})
 
 
 def instruction_for(task: str, concept: Concept, support: list[str], listener: Listener) -> str:
@@ -353,6 +360,134 @@ def elaboration_plan(
 
 
 @mcp.tool(
+    title="Show me a figure to describe",
+    description=(
+        "Returns one figure from a programme as an image, with its caption and the sentences "
+        "that refer to it, for you to describe. Send the description back to apply_elaborations "
+        'as {"task": "figure", "figure_id": ..., "fields": {...}}. Call again for the '
+        "next one. Describe only what you can see; do not state a value the paper's own text "
+        "does not, because the check will reject it and it should."
+    ),
+)
+def next_figure(
+    programme_id: str,
+    figure_id: Annotated[
+        str | None, Field(description="A specific figure, or the next one")
+    ] = None,
+) -> list[Any]:
+    """Hand the assistant a figure to look at.
+
+    A tool of its own rather than part of ``elaboration_plan`` for two reasons. A figure belongs
+    to a *place in the document* rather than to a concept, so it is answered with a ``figure_id``
+    and nothing about it fits the concept-shaped plan. And it returns an image, which means the
+    result is a list of content blocks rather than one JSON object.
+
+    One at a time on purpose. Each crop crosses the transport as base64, and a description is
+    worth more attention than a batch of six invites.
+    """
+    from mimem.elaborate.figures import described, figure_tasks
+
+    workspace = _workspace()
+    directory = workspace.directory(programme_id)
+    doc = Document.from_json((directory / "doc.ir.json").read_bytes())
+
+    pending = [
+        task
+        for task in figure_tasks(doc)
+        if task.image
+        and task.image is not None
+        and (directory / task.image).exists()
+        and described(doc.block(task.block_id)) is None
+        and (figure_id is None or task.block_id == figure_id)
+    ]
+    if not pending:
+        return [
+            {
+                "programme_id": programme_id,
+                "remaining": 0,
+                "note": "Every figure with a crop has been described.",
+            }
+        ]
+
+    task = pending[0]
+    schema = FigureOut.model_json_schema()
+    return [
+        {
+            "programme_id": programme_id,
+            "figure_id": task.block_id,
+            "number": task.number,
+            "caption": task.caption,
+            "source_sentences": task.references,
+            "fields": sorted(schema.get("properties", {})),
+            "remaining": len(pending),
+            "instruction": (
+                "Describe this figure for someone who cannot see it, in the order the fields "
+                "ask for: a title-like statement under 125 characters, then what kind of figure "
+                "it is, then the axes and units, then the trend, then any notable exceptions, "
+                "then the claim it supports. Never speak the figure's number. Mention colour "
+                "only if colour carries meaning.\n\n"
+                "Do not state a value that the caption or the sentences above do not state. "
+                "Numbers you read off the plot cannot be checked against anything, so they are "
+                "rejected whether they are right or wrong -- say 'well over half' instead. Set "
+                "confidence honestly: below "
+                f"{MIN_FIGURE_CONFIDENCE} the description is discarded and the caption is used."
+            ),
+        },
+        _image_content((directory / str(task.image)).read_bytes()),
+    ]
+
+
+def _apply_figure(
+    doc: Document, answer: dict[str, Any], fields: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Validate, check and store one figure description. ``None`` means it was accepted."""
+    from mimem.elaborate import figures as fig
+
+    figure_id = str(answer.get("figure_id", ""))
+    try:
+        block = doc.block(figure_id)
+    except KeyError:
+        return {"task": "figure", "figure_id": figure_id, "reason": "no such figure"}
+
+    try:
+        data = FigureOut.model_validate(fields)
+    except Exception as exc:
+        return {"task": "figure", "figure_id": figure_id, "reason": f"schema: {exc}"}
+
+    task = next((t for t in fig.figure_tasks(doc) if t.block_id == figure_id), None)
+    source = task.source if task is not None else block.text
+    ok, findings = fig.accept(data, source)
+    if not ok:
+        return {
+            "task": "figure",
+            "figure_id": figure_id,
+            "reason": (
+                "; ".join(str(f) for f in findings[:3])
+                if findings
+                else f"confidence {data.confidence:.2f} is below {fig.MIN_CONFIDENCE}"
+            ),
+            "advice": (
+                "A value you read off the plot cannot be checked against anything, so it is "
+                "rejected whether it is right or wrong. Say 'well over half' rather than a "
+                "percentage, unless the paper's own text states the number."
+            ),
+        }
+
+    fig.store(block, data)
+    return None
+
+
+def _image_content(png: bytes) -> ImageContent:
+    # ``mime_type`` in this SDK version, not ``mimeType``. The wire format is camelCase and the
+    # Python attribute is not, which has now cost time twice in this repository.
+    return ImageContent(
+        type="image",
+        data=base64.b64encode(png).decode("ascii"),
+        mime_type="image/png",
+    )
+
+
+@mcp.tool(
     title="Apply the elaborations",
     description=(
         "Store the explanations you wrote. Each answer is {task, concept_id, fields}. Every one "
@@ -378,12 +513,23 @@ def apply_elaborations(
     accepted: list[str] = []
     rejected: list[dict[str, Any]] = []
 
+    figures_stored = 0
+
     for answer in answers:
         task = str(answer.get("task", ""))
         concept_id = str(answer.get("concept_id", ""))
         fields = answer.get("fields") or {}
-        concept = registry.concepts.get(concept_id)
 
+        if task in FIGURE_TASKS:
+            outcome = _apply_figure(doc, answer, fields)
+            if outcome is None:
+                figures_stored += 1
+                accepted.append(f"figure: {answer.get('figure_id', '')}")
+            else:
+                rejected.append(outcome)
+            continue
+
+        concept = registry.concepts.get(concept_id)
         if task not in TASK_SCHEMAS or concept is None:
             rejected.append(
                 {"task": task, "concept_id": concept_id, "reason": "unknown task or concept"}
@@ -416,6 +562,10 @@ def apply_elaborations(
         accepted.append(f"{task}: {concept.canonical}")
 
     (directory / "registry.json").write_text(registry.to_json(), encoding="utf-8")
+    if figures_stored:
+        # A figure description lives on its caption block, so the document is what changed and
+        # the document is what `replan` will read back.
+        (directory / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
     result = replan(directory, settings, listener)
 
     return {

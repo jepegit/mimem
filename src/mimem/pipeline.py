@@ -103,16 +103,20 @@ def build_all(
     doc = triage(clean(load(source)))
 
     registry = build_registry(doc, listener)
-    elaboration = None
-    if client is not None:
-        elaboration = elaborate(doc, registry, profile, listener, client, budget=budget)
 
-    script = plan(doc, registry, profile, listener)
-
-    # Before rendering, not after: study.md links the crops, so they have to exist and be
-    # recorded on the document first. Failing to render one costs a picture and nothing else.
+    # Crops first. study.md links them, and stage 6 *sends* them -- a figure cannot be described
+    # from a picture that has not been rendered yet. Failing to render one costs a picture and
+    # nothing else; the audio track never mentions a file.
     out_dir.mkdir(parents=True, exist_ok=True)
     render_figures(doc, out_dir)
+
+    elaboration = None
+    if client is not None:
+        elaboration = elaborate(
+            doc, registry, profile, listener, client, budget=budget, out_dir=out_dir
+        )
+
+    script = plan(doc, registry, profile, listener)
     artefacts = render(script, doc)
 
     (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")

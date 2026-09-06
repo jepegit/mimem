@@ -24,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
@@ -42,7 +43,7 @@ from mimem.llm import tasks
 from mimem.llm.cache import CacheStats
 from mimem.llm.client import Client, LLMRefusedError, LLMUnavailableError, NullClient, Request
 from mimem.llm.cost import BudgetExceededError, Ledger, Plan, estimate
-from mimem.llm.schemas import AnalogyOut, AnchorOut, GlossOut, WhyOut
+from mimem.llm.schemas import AnalogyOut, AnchorOut, FigureOut, GlossOut, WhyOut
 
 # The supporting-sentence index is shared between stage 6 and stage 7. It lives with the
 # planner, which is its heavier user; importing it here is deliberate rather than a layering
@@ -166,6 +167,14 @@ def _requests(
         if concept.analogy is None and _support_texts(pool, concept.id):
             yield tasks.analogy(concept, _support_texts(pool, concept.id), document, listener)
 
+    # Figures, so that --dry-run prices them. The image is not available here -- crops are
+    # rendered into the output directory, which a dry run does not have -- so the estimate
+    # falls back to DEFAULT_IMAGE_TOKENS, which is deliberately generous rather than optimistic.
+    from mimem.elaborate.figures import figure_tasks
+
+    for task in figure_tasks(doc):
+        yield tasks.figure(task.caption, task.references, document)
+
 
 def elaborate(
     doc: Document,
@@ -175,6 +184,7 @@ def elaborate(
     client: Client | None = None,
     *,
     budget: float | None = None,
+    out_dir: Path | None = None,
 ) -> ElaborationReport:
     """Fill in the glosses, anchors, why-explanations and analogies the budget allows.
 
@@ -244,7 +254,64 @@ def elaborate(
             fallback="no analogy",
         )
 
+    _describe_figures(report, client, doc, document, out_dir)
     return report
+
+
+def _describe_figures(
+    report: ElaborationReport,
+    client: Client,
+    doc: Document,
+    document: str,
+    out_dir: Path | None,
+) -> None:
+    """Say what each figure shows, when there is a crop to look at (PLAN-figures stage C).
+
+    Skipped entirely without ``out_dir``: describing a figure from its caption alone is the
+    thing the confidence field exists to refuse, and a task that can only degrade is better not
+    attempted than attempted and reported.
+
+    A figure has no concept, so this does not go through :func:`_run` -- but it keeps the same
+    three commitments: budget checked before spending, output checked before storing, and a
+    failure recorded as a degradation rather than raised.
+    """
+    from mimem.elaborate import figures as fig
+
+    if out_dir is None:
+        return
+    for task in fig.figure_tasks(doc):
+        image = fig.image_bytes(task, out_dir)
+        if image is None:
+            continue
+        request = tasks.figure(task.caption, task.references, document, image)
+        report._count(report.attempted, "figure")
+        label = f"figure {task.number}" if task.number else "a figure"
+        try:
+            report.ledger.check(estimate(request))
+            response = client.complete(request)
+        except BudgetExceededError:
+            raise
+        except (LLMUnavailableError, LLMRefusedError) as exc:
+            report.degraded.append(Degradation("figure", label, str(exc), "the caption alone"))
+            continue
+
+        report.ledger.record(response)
+        out = response.data
+        if not isinstance(out, FigureOut):  # pragma: no cover - the schema guarantees this
+            continue
+        ok, findings = fig.accept(out, task.source)
+        if not ok:
+            report.rejected.extend(findings)
+            reason = (
+                "; ".join(str(f) for f in findings[:3])
+                if findings
+                else f"confidence {out.confidence:.2f} below {fig.MIN_CONFIDENCE}"
+            )
+            report.degraded.append(Degradation("figure", label, reason, "the caption alone"))
+            continue
+
+        fig.store(doc.block(task.block_id), out)
+        report._count(report.succeeded, "figure")
 
 
 def _run(
@@ -302,7 +369,11 @@ GROUNDING_KINDS: dict[str, tuple[str, ...]] = {
     "anchor": ("number", "year"),
     "analogy": ("number", "year"),
     "compress": ("number", "year", "name", "direction"),
-    "figure": ("number", "year"),
+    # A figure description is a claim *about the document*, so it faces the direction checks
+    # too -- "capacity falls" where the paper says it rises is the failure this exists for. It
+    # is excused the name check for the reason an anchor is: the legend names species the
+    # running text often never mentions.
+    "figure": ("number", "year", "direction"),
 }
 
 

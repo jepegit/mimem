@@ -97,5 +97,9 @@ things that only work on a page, and the written track is where they survive.
 
 ## Next
 
-[Install it](install.md){ .md-button .md-button--primary } &nbsp;
+The quickest way in, if you have Claude Desktop or ChatGPT Desktop, is to skip the command line
+altogether — the assistant builds the programme, writes the explanations and quizzes you:
+
+[Use it from Claude or ChatGPT](assistant.md){ .md-button .md-button--primary } &nbsp;
+[Install the CLI](install.md){ .md-button } &nbsp;
 [Do your first paper](first-paper.md){ .md-button }

@@ -38,6 +38,7 @@ from mimem.lint import lint as run_lint
 from mimem.lint import lint_script as run_lint_script
 from mimem.llm import Cached, Client, FixtureClient, NullClient
 from mimem.llm.cost import BudgetExceededError
+from mimem.pipeline import build_all
 from mimem.plan import plan as run_plan
 from mimem.render import narrate as run_narrate
 from mimem.render import render as run_render
@@ -508,40 +509,30 @@ def build(
     settings = Settings()
     profile, listener = _profile_and_listener(profile_name, listener_file, settings)
 
+    # The nine stages live in `mimem.pipeline`, shared with the assistant server: two copies of
+    # that sequence would drift the first time a stage moved.
+    client = (
+        _make_client(fixtures, live, None, settings, no_cache=False)
+        if (fixtures is not None or live)
+        else None
+    )
     try:
-        doc = run_ingest(source)
+        result = build_all(source, out_dir, profile, listener, client=client, budget=budget)
     except IngestError as exc:
         _fail(str(exc))
         return
-    doc = run_triage(run_clean(doc))
-    _print_diagnostics(doc)
+    except BudgetExceededError as exc:
+        _fail(str(exc))
+        return
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
-    registry = build_registry(doc, listener)
-    if fixtures is not None or live:
-        client = _make_client(fixtures, live, None, settings, no_cache=False)
-        try:
-            _print_elaboration(
-                run_elaborate(doc, registry, profile, listener, client, budget=budget)
-            )
-        except BudgetExceededError as exc:
-            _fail(str(exc))
-            return
-    (out_dir / "registry.json").write_text(registry.to_json(), encoding="utf-8")
-
-    script = run_plan(doc, registry, profile, listener)
-    (out_dir / "script.json").write_text(script.to_json(), encoding="utf-8")
-    (out_dir / "drop-report.md").write_text(drop_report(doc), encoding="utf-8")
-
-    artefacts = run_render(script)
-    artefacts.write(out_dir)
+    _print_diagnostics(result.doc)
+    if result.elaboration is not None:
+        _print_elaboration(result.elaboration)
     console.print(f"[green]wrote[/] {out_dir}: audio.md, study.md, cards.json, manifest.json")
-    _print_script_summary(script, profile)
+    _print_script_summary(result.script, profile)
 
-    report = run_lint_script(script, artefacts.audio, profile)
-    _report_lint(report)
-    if not report.ok:
+    _report_lint(result.lint)
+    if not result.lint.ok:
         raise typer.Exit(code=1)
 
 

@@ -215,7 +215,7 @@ def elaborate(
                 concept,
                 partial(_apply_anchor, concept),
                 source=source,
-                kinds=("number", "year"),
+                kinds=GROUNDING_KINDS["anchor"],
                 fallback="no anchor",
             )
         if concept.why is None:
@@ -240,7 +240,7 @@ def elaborate(
             concept,
             partial(_apply_analogy, concept),
             source="\n".join(support),
-            kinds=("number", "year"),
+            kinds=GROUNDING_KINDS["analogy"],
             fallback="no analogy",
         )
 
@@ -273,9 +273,8 @@ def _run(
         return
 
     report.ledger.record(response)
-    text = _claim_text(response.data)
-    findings = [f for f in check(text, source) if f.kind in kinds]
-    if any(f.severity is Severity.ERROR for f in findings):
+    findings = ground(response.data, source, kinds=kinds)
+    if findings:
         report.rejected.extend(findings)
         report.degraded.append(
             Degradation(
@@ -291,6 +290,69 @@ def _run(
 
     apply(response.data)
     report._count(report.succeeded, request.task)
+
+
+#: Which checks each task's output faces (rule GRD-03). A gloss or a why-explanation is a claim
+#: *about the document*, so it faces all of them. An anchor and an analogy are ours and are
+#: supposed to contain what the paper never said, so they face the numeric checks only -- see the
+#: module docstring.
+GROUNDING_KINDS: dict[str, tuple[str, ...]] = {
+    "gloss": ("number", "year", "name", "direction"),
+    "why": ("number", "year", "name", "direction"),
+    "anchor": ("number", "year"),
+    "analogy": ("number", "year"),
+    "compress": ("number", "year", "name", "direction"),
+    "figure": ("number", "year"),
+}
+
+
+def store(
+    concept: Concept,
+    task: str,
+    data: BaseModel,
+    spans: list[Span] | None = None,
+) -> None:
+    """Put a checked elaboration on a concept.
+
+    Public for the same reason :func:`ground` is: the assistant round trip in
+    :mod:`mimem.assistant` writes to the registry too, and two functions that both know how a
+    gloss is stored will eventually disagree about it.
+
+    Call :func:`ground` first. This does not check anything.
+    """
+    if isinstance(data, GlossOut):
+        _apply_gloss(concept, data)
+    elif isinstance(data, AnchorOut):
+        _apply_anchor(concept, data)
+    elif isinstance(data, AnalogyOut):
+        _apply_analogy(concept, data)
+    elif isinstance(data, WhyOut):
+        _apply_why(concept, spans or [], data)
+    else:
+        raise ValueError(f"nothing knows how to store the output of {task!r}")
+
+
+def ground(
+    data: BaseModel,
+    source: str,
+    *,
+    kinds: tuple[str, ...] = ("number", "year", "name", "direction"),
+) -> list[Finding]:
+    """The gate: what in this generated output the cited source does not support (rule GRD-03).
+
+    Public, and called by every path that accepts generated text -- the API client in this
+    module and the assistant round trip in :mod:`mimem.assistant`. "The same check runs whatever
+    wrote it" is a claim worth making only while it is one function rather than two that happen
+    to agree.
+
+    Returns the *blocking* findings. Warnings (an unfamiliar proper noun, say) are informative
+    rather than disqualifying and are deliberately not returned here.
+    """
+    return [
+        f
+        for f in check(_claim_text(data), source)
+        if f.kind in kinds and f.severity is Severity.ERROR
+    ]
 
 
 def _claim_text(data: BaseModel) -> str:

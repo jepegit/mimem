@@ -12,10 +12,21 @@ it runs out where it runs out.
 """
 
 from mimem.elaborate.run import (
+    GROUNDING_KINDS,
     Degradation,
     ElaborationReport,
     elaborate,
+    ground,
     plan_requests,
+    store,
 )
 
-__all__ = ["Degradation", "ElaborationReport", "elaborate", "plan_requests"]
+__all__ = [
+    "GROUNDING_KINDS",
+    "Degradation",
+    "ElaborationReport",
+    "elaborate",
+    "ground",
+    "plan_requests",
+    "store",
+]

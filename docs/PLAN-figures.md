@@ -1,0 +1,278 @@
+# Plan: saying what a figure shows
+
+A listener gets nothing from a figure. Today mimem admits that — "there is a figure here, it is
+in the written notes" — which is honest and is the right default, but it is also the largest
+remaining hole in what a programme carries. In a review paper the figures often *are* the
+argument.
+
+This is the plan for closing it. It is deliberately staged, because the first stage needs no
+model at all and delivers most of the listener value, and the last stage is the highest
+hallucination risk in the system.
+
+---
+
+## 1. The thing that reframes the design
+
+A ninety-eight page review, run through the current pipeline:
+
+| | |
+|---|---|
+| Blocks classified `FIGURE` | **155** |
+| Actual figures | **11** (plus 5 tables) |
+| Embedded images per figure | 1, 1, 2, 2, 2, 2, **38**, **39**, **66** |
+| Median figure block area | 2 322 pt² — about 48×48 points |
+
+A figure in a PDF is not an image. It is between one and sixty-six embedded fragments, most of
+them smaller than a thumbnail, plus — for anything drawn by a plotting library — vector content
+that produces **no image block at all**.
+
+So the unit of description cannot be the image block. Sending those 155 to a vision model would
+cost roughly fourteen times what the work is worth and would produce descriptions of panel
+borders and journal ornaments.
+
+**The caption is the index of real figures.** There are 16 of them in that paper, mimem already
+extracts every one, and they are the paper's own words about what the figure shows. Everything
+below follows from taking the caption rather than the image as the anchor.
+
+---
+
+## 2. What already exists
+
+More than the milestone list suggests. This is a plan for four missing pieces, not for a
+subsystem.
+
+| Piece | State |
+|---|---|
+| `FigureOut` schema — the six template fields plus `confidence` | **Written.** FIG-01 compliance is a schema property, not prose to pattern-match |
+| `tasks.figure(caption, references, document)` | **Written**, including "the image itself is attached by the caller when a vision-capable model is configured" |
+| Figure geometry — page, bbox, xref per image | **Extracted**, with the ingest comment `# No file written: page + bbox is enough to re-render a crop on demand` |
+| `CAPTION` block detection | **Works**, 16 of 16 found, with one false positive (§4) |
+| `FIG-01` lint rule, template compliance | **Written** in M6, exempting the honest announcement |
+| Grounding gate, confidence, cost ledger, fixture replay | **Written**, and reusable unchanged |
+
+Missing: figure *units*, rendering, image transport, and placement.
+
+---
+
+## 3. Four stages
+
+### Stage A — figure units (no model, no cost)
+
+Group blocks into a `Figure`: a caption, the region it belongs to, and the sentences that refer
+to it.
+
+- **Pair caption to region by geometry, not by page.** Page-level pairing is useless — 154 of
+  155 image blocks sit on a page that has a caption, and page 26 of the test paper carries
+  Figures 8 and 9 with 38 image blocks between them. The rule that works, checked against every
+  figure in the test paper: **take the blocks above the caption and stop at the first one that
+  is not a figure.** On page 3 that is figures at y1=538 and 487 and then a paragraph at 112; on
+  page 10, one figure at 713 and then a paragraph at 349. The region is the union, clipped to
+  the caption's column.
+- **A figure with no caption is decorative.** That is `FIG-06`, and it becomes a deterministic
+  rule rather than a judgement: 139 of 155 blocks disappear here, for free.
+- **Collect references.** The caption names itself — "Figure 3" — so the body sentences
+  mentioning "Figure 3" are findable by search. These supply `tasks.figure(references=...)` and
+  the placement anchor for `FIG-04`.
+- **Tables are paired but never rendered.** Five of the sixteen captions are table captions, and
+  the pairing feeds `TBL-01`'s strategy choice — but a table is *text*, and its caption sits
+  above its content rather than below it (Table 2 in the test paper is at the very top of its
+  page with nothing above it at all). Sending a table through the image path would be a picture
+  of words.
+
+**Stage A ships on its own.** The announcement stops being "there is a figure here" and becomes
+"there's a figure here showing gas production composition for four samples — it's in the written
+notes." That is the paper's own caption, fully grounded, no model, no risk, and it is most of
+what a listener needed. Everything after this is an improvement on a thing that already works.
+
+### Stage B — rendering (no model)
+
+`page.get_pixmap(clip=rect)` over the union rect. PyMuPDF is already a dependency, and rendering
+the *region* rather than the embedded images is what catches vector plots — page 10 of the test
+paper has one image block and three vector drawings, and the drawings are the figure.
+
+**Render at 100 dpi, cap the long edge.** Measured on a real figure region:
+
+| dpi | pixels | PNG | vision tokens |
+|---|---|---|---|
+| 72 | 500×320 | 59 KB | ~210 |
+| 100 | 695×445 | 103 KB | ~410 |
+| 150 | 1042×668 | 176 KB | ~930 |
+
+150 dpi costs four times what 72 does and shows a plot no better. This matters more for the
+conversation path than the API one: every crop crosses the MCP transport as base64, which
+inflates it by a third.
+
+Write the crops into the artefact directory (`figures/fig-03.png`), record a hash in the
+manifest, and link them from `study.md`. That last part has value with or without any
+description: the written companion currently tells you a figure exists and makes you go back to
+the PDF.
+
+### Stage C — description, two paths, one schema
+
+Both paths produce a `FigureOut` and pass through the same gate. Neither is a fallback for the
+other; they are the two places mimem runs.
+
+**The API path.** `Request` grows an image field; `AnthropicClient` sends an image block
+alongside the instruction. Two details that will bite if they are missed:
+
+- `Request.digest()` must hash the image bytes. It currently keys on task, prompt, model and
+  schema — all identical across every figure in a document. Without the image in the digest the
+  cache and the fixture store would serve figure 3's description for figure 7, and the output
+  would look perfectly plausible. This is the single most dangerous line in the whole plan.
+- The cost model must price images as volatile suffix tokens, not as cached prefix.
+
+**The conversation path.** MCP tool results can carry image content — `mcp.types.ImageContent`
+takes base64 `data` and a `mimeType`, and it is in the SDK version already pinned. So
+`elaboration_plan` hands Claude Desktop the rendered crop and the assistant — already
+vision-capable, already writing the glosses — writes the description and returns it through
+`apply_elaborations`. This is the trick that made stage 6 free, applied to the one task that
+would otherwise make a vision model a hard dependency.
+
+*(Still to verify before building: that Claude Desktop puts a tool result's image into the
+model's context rather than only rendering it for the user. The SDK supporting the type is not
+the same claim. If that is false the conversation path does not work — see §6.)*
+
+### Stage D — placement and voice
+
+`FIG-04`: the description goes at the **first reference in the prose**, not where the figure sits
+on the page, and the reference is rewritten so no figure number is spoken.
+
+**And it needs a fallback, which the first draft of this plan did not have.** The test paper
+references its figures twelve times across nine of them — Figures 8 and 9 are never mentioned in
+prose at all. A rule that places a description at its first reference silently drops every
+figure nobody refers to, which is 2 of 11 here. So: first reference if there is one, otherwise
+the figure's own position in reading order within its section. The fallback is the worse
+placement and it has to exist.
+
+`FIG-05` (dense data graphics become a table first) and `FIG-06` (drop decorative) are planner
+rules that stage A makes checkable. `FIG-07` — model and confidence recorded in the manifest —
+is a `Provenance` field that already exists.
+
+---
+
+## 4. The gate
+
+This is the part of the design that matters most, because a figure description is the only
+output in the system that asserts things appearing in **no sentence of the source**. The
+existing `check()` compares generated text against the spans it was written from; for a figure
+there are no spans, and the image is not something `check()` can read.
+
+Four layers, weakest to strongest:
+
+1. **Numbers and directions against caption plus references.** The existing `ground()`, unchanged.
+   It catches an invented value and a reversed trend whenever the text states either. It cannot
+   catch "the line rises" when nothing in the text says which way it goes, and it should not
+   pretend to.
+2. **Confidence degrades to caption-only.** Already designed as `FIG-07`, already a required
+   schema field. A description written from the caption alone should say so and then not be
+   spoken as fact.
+3. **No card may take its answer from a figure description.** This is the rule I would not ship
+   without. A wrong description spoken once is a wrong sentence. A wrong description turned into
+   a spaced-repetition card is a wrong fact rehearsed at expanding intervals — mimem using the
+   largest effect in the learning literature to teach an error. The cost of the rule is a few
+   cards; the cost of not having it is the worst failure the system can produce.
+4. **Attribution without hedging.** The description is the *paper's* data, not our analogy, so
+   `VOI-02`-style ownership marking would be wrong — it would file a correct description as a
+   guess. "The figure shows…" is the right voice: it attributes the claim to the figure, which
+   is where a listener can go and check it.
+
+---
+
+## 5. The false caption
+
+`CAPTION_RE` matches the first line of a block, so on page 19 of the test paper it classified
+this as a caption:
+
+> Figure 6 exemplifies how transfer learning combined with Sha…
+
+That is a sentence. It is also *exactly* what stage A wants as a **reference** for `FIG-04`, so
+the fix and the feature are the same work.
+
+The discriminator is not length — the false caption is 45 words and the real ones run from 5 to
+88, one of them also 45. It is the **delimiter after the number**. A caption writes "Figure 6."
+or "Figure 6:"; a sentence writes "Figure 6 exemplifies". Requiring `[.:—)]` after the numeral
+separates all sixteen blocks in the test paper correctly, and it is one character class added to
+a regex that already exists.
+
+Getting this wrong permissively costs a figure described from a sentence about it; getting it
+wrong strictly loses a figure entirely.
+
+---
+
+## 6. What could go wrong
+
+| Risk | Mitigation |
+|---|---|
+| The MCP host does not put tool-result images into the model's context | **The one unverified assumption.** Check it before writing stage C. If false, stages A and B still ship and stage C waits for API-only use |
+| Region pairing grabs the wrong rectangle | Crops are written to disk and linked from `study.md`, so a wrong crop is visible rather than silent. A lint rule can check that every described figure's crop is non-empty and inside the page |
+| A confidently wrong description | §4, and the card rule in particular |
+| The cache serves one figure's description for another | The digest change in §3, and a test that two figures in one document produce two digests |
+| Vector-only figures produce an empty region | Detect an empty crop and fall back to the caption-only announcement, which is today's behaviour and is never worse than today |
+
+Cost is **not** on this list, and the first draft was wrong to put it there. Eleven figures at
+~410 image tokens each, against a document prefix that is already cached, is not a bill anybody
+will notice. The reason to cut 155 candidates to 11 is that a description of a journal logo is
+*noise in the programme*, which is a quality argument and a much better one.
+
+---
+
+## 7. Out of scope
+
+- Reading data *off* a plot to reconstruct a table. That is `FIG-05`'s ambition and it deserves
+  its own evaluation before anyone trusts it.
+- Equations as images. The same rendering machinery would serve, but `MTH-*` has its own rules.
+- Describing figures in the listener's second language, or at multiple levels of detail.
+
+---
+
+## 8. Done when
+
+- A paper with figures produces a programme in which each real figure is described at its first
+  mention, in the template order, with the model and confidence in the manifest.
+- `mimem eval` gains a figure column, and the corpus gains a document with a real figure in it.
+- Every stage is separately useful: A and B improve the output with no model configured at all.
+
+---
+
+## 9. What reviewing this plan changed
+
+The review was done against the test paper and the installed libraries rather than by rereading
+the prose, which is the only kind of review that finds these. Six things changed; two of them
+were the plan being wrong rather than vague.
+
+**`FIG-04` would have silently dropped figures.** The plan said "place the description at the
+first reference in the prose" and stopped there. Counting the references in the test paper found
+twelve, across nine of the eleven figures: **Figures 8 and 9 are never mentioned in the text at
+all.** A rule with no fallback would have described them and then had nowhere to put them. The
+fallback is now stated, and it is the weaker placement, which is worth writing down as such.
+
+**The false-caption discriminator I proposed does not work.** The plan said a caption is "a block
+whose whole text is caption-shaped and which sits against graphics" — which is vague, and the
+obvious sharpening of it, length, is useless: the one false caption is 45 words and the real ones
+run 5 to 88 with another at exactly 45. Checking the actual strings found the real discriminator,
+which is the **delimiter after the number** — "Figure 6." against "Figure 6 exemplifies" — and it
+separates all sixteen correctly. It is also a one-character-class change rather than new
+geometry, so the plan got simpler as well as correct.
+
+**Cost was an argument I did not have.** The plan justified cutting 155 candidates to 11 partly
+on expense. Measuring says a crop is ~410 vision tokens at 100 dpi and the document prefix is
+already cached, so eleven of them cost nothing worth discussing. The real argument was always the
+quality one — a description of a journal logo is noise in a programme — and leaning on a cost
+claim that does not survive arithmetic would have made the whole section easier to dismiss.
+
+**150 dpi was four times too much.** Measured: 72 dpi is 210 tokens, 150 dpi is 930, and the plot
+is not more legible. On the conversation path every crop also crosses the transport as base64.
+
+**Tables needed separating explicitly.** The plan had them "coming along" with the same pairing,
+which is true for `TBL-01` and dangerous everywhere else: a table is text, its caption sits
+*above* its content, and Table 2 in the test paper is at the very top of a page with nothing
+above it at all. Rendering one would produce a picture of words.
+
+**The region rule got specific enough to test.** "Clipped to the column and stopping at the
+nearest text block" became "take blocks above the caption, stop at the first non-figure", which
+was then checked against every figure in the paper and works on all of them.
+
+One assumption survived unverified, and it is flagged as such in §3 and §6: `mcp.types.
+ImageContent` exists in the pinned SDK, but whether Claude Desktop puts a tool result's image
+into the *model's* context — rather than only showing it to the user — is not something the SDK
+can tell us. Stage C rests on it. Stages A and B do not.

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 344" width="900" height="344" role="img" aria-labelledby="t d">
+<title id="t">What comes out, in the order you hear it</title>
+<desc id="d">Five blocks along a timeline: an orientation, two to four questions to hold on to, at most seven terms, the paper in segments of 45 to 90 seconds each ending on a question, and a review that shuffles every section's question together. Below, a clock shows one concept being met and then brought back three times at growing intervals.</desc>
+<rect width="900" height="344" fill="#0d0d11"/>
+<text x="36" y="42" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="20" font-weight="700" font-style="normal" letter-spacing="0" fill="#e8e6e3" text-anchor="start">What comes out, in the order you hear it</text>
+<rect x="36" y="92" width="140" height="96" rx="6" fill="#17171d" stroke="#3a3730" stroke-width="1.4"/>
+<text x="50" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" font-style="normal" letter-spacing="0" fill="#e8e6e3" text-anchor="start">Orientation</text>
+<text x="50" y="144" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">what this is, and</text>
+<text x="50" y="160" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">how long it takes</text>
+<rect x="188" y="92" width="152" height="96" rx="6" fill="#2a1d14" stroke="#d97b3c" stroke-width="1.4"/>
+<text x="202" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="start">Questions</text>
+<text x="202" y="144" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">two to four, to hold</text>
+<text x="202" y="160" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">on to. Not answered yet</text>
+<rect x="352" y="92" width="108" height="96" rx="6" fill="#17171d" stroke="#3a3730" stroke-width="1.4"/>
+<text x="366" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" font-style="normal" letter-spacing="0" fill="#e8e6e3" text-anchor="start">Terms</text>
+<text x="366" y="144" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">at most seven,</text>
+<text x="366" y="160" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">one line each</text>
+<rect x="472" y="92" width="232" height="96" rx="6" fill="#17171d" stroke="#3a3730" stroke-width="1.4"/>
+<text x="486" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" font-style="normal" letter-spacing="0" fill="#e8e6e3" text-anchor="start">The paper</text>
+<text x="486" y="144" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">in segments of 45 to 90 seconds,</text>
+<text x="486" y="160" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">each ending on a question</text>
+<rect x="716" y="92" width="148" height="96" rx="6" fill="#2a1d14" stroke="#d97b3c" stroke-width="1.4"/>
+<text x="730" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="start">Review</text>
+<text x="730" y="144" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">every section's question,</text>
+<text x="730" y="160" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">shuffled together</text>
+<line x1="36" y1="236" x2="864" y2="236" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="36.0" y1="232" x2="36.0" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="139.5" y1="232" x2="139.5" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="243.0" y1="232" x2="243.0" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="346.5" y1="232" x2="346.5" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="450.0" y1="232" x2="450.0" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="553.5" y1="232" x2="553.5" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="657.0" y1="232" x2="657.0" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="760.5" y1="232" x2="760.5" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<line x1="864.0" y1="232" x2="864.0" y2="240" stroke="#3a3730" stroke-width="1.5"/>
+<text x="36" y="258" font-family="'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace" font-size="11.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="start">0 min</text>
+<text x="864" y="258" font-family="'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace" font-size="11.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#9a938a" text-anchor="end">end</text>
+<circle cx="190" cy="236" r="6" fill="#d97b3c"/>
+<text x="190" y="276" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="middle">first met</text>
+<circle cx="330" cy="236" r="6" fill="#d97b3c"/>
+<text x="330" y="276" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="middle">again</text>
+<path d="M 190 228 C 260.0 190, 260.0 190, 330 228" fill="none" stroke="#d97b3c" stroke-width="1.5" opacity="0.75"/>
+<circle cx="530" cy="236" r="6" fill="#d97b3c"/>
+<text x="530" y="276" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="middle">and again</text>
+<path d="M 330 228 C 430.0 190, 430.0 190, 530 228" fill="none" stroke="#d97b3c" stroke-width="1.5" opacity="0.75"/>
+<circle cx="770" cy="236" r="6" fill="#d97b3c"/>
+<text x="770" y="276" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="middle">in the review</text>
+<path d="M 530 228 C 650.0 190, 650.0 190, 770 228" fill="none" stroke="#d97b3c" stroke-width="1.5" opacity="0.75"/>
+<text x="36" y="322" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="13" font-weight="400" font-style="italic" letter-spacing="0" fill="#9a938a" text-anchor="start">One idea, four times, at growing intervals - which is the largest effect in the literature</text>
+</svg>

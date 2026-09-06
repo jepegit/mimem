@@ -21,6 +21,9 @@ four-decimal percentage nobody could hold, and out the other side.
 **mimem rewrites the document so the text itself does what a careful reader would have done.**
 Then it hands the result to a speech engine.
 
+![Reading loops backwards to re-read and jump back. Listening is a straight line with the words behind you fading out and no way back. mimem builds the loops into the text: a concrete image, a question with a pause after it, and forward arcs bringing each idea back at growing intervals.](assets/lanes-light.svg#only-light)
+![Reading loops backwards to re-read and jump back. Listening is a straight line with the words behind you fading out and no way back. mimem builds the loops into the text: a concrete image, a question with a pause after it, and forward arcs bringing each idea back at growing intervals.](assets/lanes-dark.svg#only-dark)
+
 <div class="mimem-cards" markdown>
 
 <div markdown>

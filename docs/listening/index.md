@@ -12,6 +12,9 @@ them, that is [building it](../building/index.md).
 
 ## The shape of a programme
 
+![A programme runs: an orientation, two to four questions to hold on to, at most seven terms, the paper in segments of 45 to 90 seconds each ending on a question, and a review that shuffles every section's question together. Underneath, one idea is met and brought back three times at growing intervals.](../assets/anatomy-light.svg#only-light)
+![A programme runs: an orientation, two to four questions to hold on to, at most seven terms, the paper in segments of 45 to 90 seconds each ending on a question, and a review that shuffles every section's question together. Underneath, one idea is met and brought back three times at growing intervals.](../assets/anatomy-dark.svg#only-dark)
+
 mimem does not read a paper aloud. It builds a **programme** out of it, and the programme has a
 shape that a paper does not:
 

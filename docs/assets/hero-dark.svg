@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300" role="img" aria-labelledby="t d">
+<title id="t">mimem</title>
+<desc id="d">A dense page of text on the left, an arrow, and on the right a waveform with deliberate silences marked in copper: a question, and the time to answer it.</desc>
+<rect width="900" height="300" fill="#0d0d11"/>
+<defs><marker id="a-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#d97b3c"/></marker></defs><rect x="60" y="158" width="220" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="60" y="173" width="236" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="60" y="188" width="228" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="60" y="203" width="240" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="60" y="218" width="210" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="60" y="233" width="234" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="60" y="248" width="150" height="5" rx="2.5" fill="#3a3730"/>
+<rect x="42" y="132" width="292" height="152" rx="6" fill="none" stroke="#3a3730" stroke-width="1.5"/>
+<text x="42" y="118" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" font-style="normal" letter-spacing="0.08em" fill="#9a938a" text-anchor="start">a paper</text>
+<path d="M 372 208 L 436 208" stroke="#d97b3c" stroke-width="2" fill="none" marker-end="url(#a-dark)"/>
+<rect x="470" y="201.0" width="5" height="14" rx="2.5" fill="#e8e6e3"/>
+<rect x="481" y="197.0" width="5" height="22" rx="2.5" fill="#e8e6e3"/>
+<rect x="492" y="193.0" width="5" height="30" rx="2.5" fill="#e8e6e3"/>
+<rect x="503" y="195.0" width="5" height="26" rx="2.5" fill="#e8e6e3"/>
+<rect x="514" y="199.0" width="5" height="18" rx="2.5" fill="#e8e6e3"/>
+<rect x="525" y="194.0" width="5" height="28" rx="2.5" fill="#e8e6e3"/>
+<rect x="536" y="190.0" width="5" height="36" rx="2.5" fill="#e8e6e3"/>
+<rect x="547" y="193.0" width="5" height="30" rx="2.5" fill="#e8e6e3"/>
+<rect x="558" y="198.0" width="5" height="20" rx="2.5" fill="#e8e6e3"/>
+<rect x="569" y="195.0" width="5" height="26" rx="2.5" fill="#d97b3c"/>
+<rect x="613" y="191.0" width="5" height="34" rx="2.5" fill="#e8e6e3"/>
+<rect x="624" y="188.0" width="5" height="40" rx="2.5" fill="#e8e6e3"/>
+<rect x="635" y="193.0" width="5" height="30" rx="2.5" fill="#e8e6e3"/>
+<rect x="646" y="197.0" width="5" height="22" rx="2.5" fill="#e8e6e3"/>
+<rect x="657" y="194.0" width="5" height="28" rx="2.5" fill="#e8e6e3"/>
+<rect x="668" y="199.0" width="5" height="18" rx="2.5" fill="#e8e6e3"/>
+<rect x="679" y="196.0" width="5" height="24" rx="2.5" fill="#d97b3c"/>
+<rect x="734" y="198.0" width="5" height="20" rx="2.5" fill="#e8e6e3"/>
+<rect x="745" y="193.0" width="5" height="30" rx="2.5" fill="#e8e6e3"/>
+<rect x="756" y="189.0" width="5" height="38" rx="2.5" fill="#e8e6e3"/>
+<rect x="767" y="192.0" width="5" height="32" rx="2.5" fill="#e8e6e3"/>
+<rect x="778" y="196.0" width="5" height="24" rx="2.5" fill="#e8e6e3"/>
+<rect x="789" y="193.0" width="5" height="30" rx="2.5" fill="#e8e6e3"/>
+<rect x="800" y="197.0" width="5" height="22" rx="2.5" fill="#e8e6e3"/>
+<rect x="811" y="200.0" width="5" height="16" rx="2.5" fill="#e8e6e3"/>
+<rect x="822" y="195.0" width="5" height="26" rx="2.5" fill="#e8e6e3"/>
+<rect x="833" y="191.0" width="5" height="34" rx="2.5" fill="#e8e6e3"/>
+<rect x="844" y="194.0" width="5" height="28" rx="2.5" fill="#e8e6e3"/>
+<rect x="855" y="199.0" width="5" height="18" rx="2.5" fill="#e8e6e3"/>
+<path d="M 585 240 L 585 248 L 617 248 L 617 240" fill="none" stroke="#d97b3c" stroke-width="1.2"/>
+<text x="601" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="middle">a question</text>
+<path d="M 695 240 L 695 248 L 727 248 L 727 240" fill="none" stroke="#d97b3c" stroke-width="1.2"/>
+<text x="711" y="264" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" font-style="normal" letter-spacing="0" fill="#d97b3c" text-anchor="middle">and the time to answer it</text>
+<text x="466" y="118" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" font-style="normal" letter-spacing="0.08em" fill="#9a938a" text-anchor="start">a programme</text>
+<text x="60" y="64" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="44" font-weight="700" font-style="normal" letter-spacing="0" fill="#e8e6e3" text-anchor="start">mimem</text>
+<text x="62" y="96" font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', serif" font-size="18" font-weight="400" font-style="italic" letter-spacing="0" fill="#9a938a" text-anchor="start">turn a paper into audio you actually remember</text>
+</svg>

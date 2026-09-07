@@ -46,9 +46,10 @@ bracket twelve", through a four-decimal percentage nobody could hold.
 
 ## Quickstart
 
-**With Claude Desktop or ChatGPT Desktop**, skip the command line — one config block and you can
-say *"make me a study programme from this paper"*, then *"quiz me on what's due"* days later.
-The assistant writes the explanations too, so no API key is needed.
+**With Claude Desktop**, skip the command line — install
+[mimem.mcpb](https://github.com/jepegit/mimem/releases/latest/download/mimem.mcpb) and you can say
+*"make me a study programme from this paper"*, then *"quiz me on what's due"* days later. The
+assistant writes the explanations too, so no API key is needed.
 [Set it up →](https://jepegit.github.io/mimem/listening/assistant/)
 
 **From a terminal:**

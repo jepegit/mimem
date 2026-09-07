@@ -769,12 +769,24 @@ index), and the missing equations above.
 *Not done:* layers 2 and 3 of §8. `gloss_coverage` sits at zero on every local build, because
 without stage 6 no term is ever defined — a real gap, now visible as a number.
 
-**Known, not fixed: two headings can merge into one section title.** On a 98-page review, stage
-2's paragraph rejoining merged a heading with the one following it in 2 of 26 sections, giving
-"2.3. Core ML Models and Training Strategies 2.3.1. Model Architectures and General Workflow".
-The output is speakable and breaks no rule, so it is a quality defect rather than a failure; the
-fix is in the column- and page-break heuristics, where a change risks every document that
-currently works. Worth doing deliberately, with the corpus grown first.
+**Fixed: paragraphs split by a page break were never rejoined.** Stage 2's merge only looked
+at *adjacent* blocks, and a page break puts a running head and a folio between the two halves of
+a paragraph — so they were never adjacent and never merged, which is the one case the module was
+written for. The seam became a sentence boundary that was never there: 31 beats in a 143-minute
+programme opened mid-clause, "voltage and temperature signals, achieving eight to thirteen
+minutes advanced warning" spoken as though it were a sentence. Merging now looks past page
+furniture and textless figures, and not past captions or headings. Rejoins on that paper went
+9 → 32, and lower-case openings 31 → 8.
+
+**Fixed: two headings could arrive as one section title.** Diagnosed wrongly the first time —
+this was blamed on paragraph rejoining, and rejoining never touches a heading. A section heading
+set directly above its first subsection has no paragraph between them, so the extractor returns
+both as one block; the lines are collapsed later and the section is called "2.3. Core ML Models
+and Training Strategies 2.3.1. Model Architectures and General Workflow". Splitting happens early
+in stage 2, while the extractor's line breaks are still there — once they are spaces there is
+nothing left to split on. Only a *multi-level* number starts a new heading, because "1.
+Introduction" on its own line is far more likely to be a list item, and splitting a list into
+headings would invent sections. Three on that paper, and none left.
 
 **M7 — TTS handoff (0.5 week).** Chunked output with stable IDs, an ElevenLabs-shaped adapter and a
 local-engine adapter (Piper/Kokoro) for cheap iteration, break-marker rendering. *Done when:* one

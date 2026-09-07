@@ -56,6 +56,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: uv run mimem eval
 
+      # The extension bundle is the only way into Claude Desktop, so a manifest that has
+      # drifted out of spec is an install nobody can complete. The unit tests check its
+      # contents; this checks it can still be produced.
+      - name: Build the extension bundle
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: uv run python packaging/build_extension.py
+
       # The documentation is part of the product, and a broken cross-reference in it is a
       # defect like any other. Building on Linux only: the output is identical and this is
       # about catching bad links, not platform differences.

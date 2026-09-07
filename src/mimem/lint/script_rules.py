@@ -707,17 +707,26 @@ class FigureDescriptionFollowsTemplate(ScriptRule):
         re.IGNORECASE,
     )
 
-    #: FIG-01's second element: what kind of figure this is.
+    #: FIG-01's second element: what kind of figure this is. Plural because "four pie charts" is
+    #: how a multi-panel figure is described, and ``\bchart\b`` does not match "charts" -- which
+    #: failed a perfectly compliant description of a real four-panel figure.
     KINDS = re.compile(
-        r"\b(?:plot|graph|chart|diagram|schematic|micrograph|image|map|photograph|histogram|"
-        r"scatter|curve|bar chart|flow ?chart)\b",
+        r"\b(?:plots?|graphs?|charts?|diagrams?|schematics?|micrographs?|images?|maps?|"
+        r"photographs?|histograms?|scatter|curves?|pie|box|heat ?maps?|contours?|flow ?charts?)\b",
         re.IGNORECASE,
     )
 
-    #: The third: what the axes carry. A figure whose axes are never named is a picture the
-    #: listener cannot reconstruct.
+    #: The third: what the values are *of*. A figure whose quantities are never named is a
+    #: picture the listener cannot reconstruct.
+    #:
+    #: Not every figure has axes. A pie chart has shares, a micrograph has a scale bar, a
+    #: schematic has parts -- and demanding the word "axis" of all of them would fail the
+    #: descriptions that got it right for the shape they were describing.
     AXES = re.compile(
-        r"\b(?:axis|axes|x[- ]axis|y[- ]axis|horizontal|vertical|against|versus)\b", re.IGNORECASE
+        r"\b(?:axis|axes|x[- ]axis|y[- ]axis|horizontal|vertical|against|versus|"
+        r"shares?|slices?|proportions?|percentages?|categor(?:y|ies)|legend|scale bar|"
+        r"rows?|columns?|units?)\b",
+        re.IGNORECASE,
     )
 
     TITLE_CHARS = 125

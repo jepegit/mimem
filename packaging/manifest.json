@@ -1,0 +1,133 @@
+{
+  "manifest_version": "0.3",
+  "name": "mimem",
+  "display_name": "mimem",
+  "description": "Turn a paper into audio designed to be remembered: questions, spacing, and nothing invented.",
+  "long_description": "mimem rewrites a document so that the text itself does what a careful reader would have done — because listening removes every one of those moves and a speech engine puts nothing back.\n\nGive it a PDF, an EPUB, a link or pasted text and it builds a **programme**: an orientation, a few questions to hold on to, the terms defined before they are used, the paper in segments that each end on a question with a pause long enough to actually try, and the ideas that matter coming back at growing intervals.\n\n**Nothing is invented.** Every sentence is either the paper's own — carrying the exact place it came from — or one of about a dozen named templates. When you write the explanations, every number in what you write is checked against the sentences it was written from, and a claim that reverses the paper's direction is rejected before it reaches the programme. You watch that happen.\n\n**No API key.** The explanations are written in the conversation, by the assistant you are already talking to.\n\nAlso: study sessions. Ask what is due and it quizzes you on the cards from every programme you have built, scheduled across days.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jan Petter Mæhlen",
+    "url": "https://github.com/jepegit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jepegit/mimem"
+  },
+  "homepage": "https://jepegit.github.io/mimem/",
+  "documentation": "https://jepegit.github.io/mimem/listening/assistant/",
+  "support": "https://github.com/jepegit/mimem/issues",
+  "license": "MIT",
+  "icon": "icon.png",
+  "keywords": [
+    "learning",
+    "memory",
+    "spaced repetition",
+    "audio",
+    "papers",
+    "research",
+    "accessibility",
+    "text to speech",
+    "study"
+  ],
+  "server": {
+    "type": "python",
+    "entry_point": "server.py",
+    "mcp_config": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/jepegit/mimem",
+        "--with",
+        "mcp",
+        "mimem-mcp"
+      ],
+      "env": {
+        "MIMEM_WORKSPACE": "${user_config.workspace}",
+        "MIMEM_LISTENER_FILE": "${user_config.listener_file}",
+        "MIMEM_DEFAULT_PROFILE": "${user_config.default_profile}"
+      }
+    }
+  },
+  "user_config": {
+    "workspace": {
+      "type": "directory",
+      "title": "Where programmes are written",
+      "description": "One directory, so nothing is ever scattered. Defaults to a 'mimem' folder in your home directory.",
+      "required": false
+    },
+    "listener_file": {
+      "type": "file",
+      "title": "What you already know",
+      "description": "Optional path to a listener.yaml listing terms you do not need explained. Without it, mimem assumes you are new to the field and defines more.",
+      "required": false
+    },
+    "default_profile": {
+      "type": "string",
+      "title": "Default profile",
+      "description": "skim, study or drill. 'study' is the sensible default: full length, a question at the end of every segment.",
+      "required": false,
+      "default": "study"
+    }
+  },
+  "compatibility": {
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  },
+  "tools": [
+    {
+      "name": "build_programme",
+      "description": "Turn a paper into a listenable programme from a path, a URL or pasted text."
+    },
+    {
+      "name": "list_programmes",
+      "description": "Every programme built so far, newest first."
+    },
+    {
+      "name": "read_programme",
+      "description": "The shape of a programme: sections, timings, concepts, cards."
+    },
+    {
+      "name": "elaboration_plan",
+      "description": "What the programme would like explained: glosses, concrete anchors, analogies."
+    },
+    {
+      "name": "apply_elaborations",
+      "description": "Store explanations you wrote, after checking every number against the source."
+    },
+    {
+      "name": "study_session",
+      "description": "The cards due for review, across every programme."
+    },
+    {
+      "name": "grade_card",
+      "description": "Record whether a card was recalled, and schedule the next review."
+    },
+    {
+      "name": "review_status",
+      "description": "What is due, what is scheduled, and how the last sessions went."
+    },
+    {
+      "name": "explain_beat",
+      "description": "Why a particular sentence is in the programme, and where it came from."
+    },
+    {
+      "name": "set_concept",
+      "description": "Correct a concept's ranking or its definition, permanently."
+    }
+  ],
+  "prompts": [
+    {
+      "name": "make_programme",
+      "description": "Build a programme from a paper and write its explanations."
+    },
+    {
+      "name": "study",
+      "description": "Quiz me on what is due."
+    },
+    {
+      "name": "why_this",
+      "description": "Explain why the programme says what it says."
+    }
+  ]
+}

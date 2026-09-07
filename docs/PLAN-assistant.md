@@ -40,7 +40,7 @@ real piece of Part 2 — and the reason any of this was built.
 |---|---|---|
 | **A. Skills only** | A skill teaching an assistant to drive the `mimem` CLI | **No.** Claude Desktop has no shell. A skill alone works in Claude Code and nowhere else the user asked about. Still worth having *alongside* the server. |
 | **B. Local MCP server over stdio** | `uvx mimem-mcp`, configured once in the host | **Yes.** Works in Claude Desktop, ChatGPT Desktop, Claude Code, VS Code and Cursor. The document never leaves the machine. |
-| **C. `.mcpb` bundle** | A zip with a manifest; double-click to install | **Next, not now** — see §11. One click in Claude Desktop is the difference between "I'll try that later" and "I tried it", but bundling PyMuPDF's platform-specific wheels is a packaging problem in its own right, and it is polish on top of a server that has to work first. |
+| **C. `.mcpb` bundle** | A zip with a manifest; double-click to install | **Now the only way in** — see the note below §4.|
 | **D. Remote hosted MCP** | A server we run; ChatGPT *web* can reach it | **No.** It would mean uploading papers that are frequently not ours to redistribute, and running infrastructure for a tool whose whole value is local. Revisit if there is demand. |
 | **E. MCP Apps / embedded UI** | An interactive panel inside the client | **Not now.** Real value for a study session eventually, but it is a second product surface before the first one has users. |
 | **F. Non-assistant exits** | Anki export, a TTS adapter, a static player | **Later, and separately.** Anki export is small and valuable; TTS is M7. Neither is on this plan's critical path. |
@@ -160,6 +160,19 @@ one of mimem's is PyMuPDF — a large, platform-specific binary wheel. That is e
 per-platform bundle or a thin launcher that shells out to `uv` anyway. Either is defensible;
 neither should block the server that has to work underneath it. Demoted to §11.
 
+> **Overturned, and by the worst kind of evidence: a user who followed these instructions and got
+> nothing.** On current Claude Desktop, `claude_desktop_config.json` is owned by the application
+> and rewritten on exit, so a hand-added `mcpServers` entry disappears at the next start —
+> silently, with no error to read. Extensions are the supported route, which makes the bundle the
+> *only* way in rather than polish on top of one.
+>
+> The packaging objection turned out to be answerable in a line. The bundle carries no code: the
+> manifest runs `uvx --from git+…`, so `uv` resolves PyMuPDF's wheel on the user's own machine for
+> the user's own platform. Neither a fat bundle nor a launcher I had to write — `packaging/` is a
+> manifest, an icon and a build script. It also buys something the JSON never could: the manifest
+> declares `user_config`, so the workspace directory and the listener file get a settings form
+> instead of a documented environment variable.
+
 **The source is often not a file path.** Someone in Claude Desktop has the paper as a chat
 attachment: the assistant can read it and cannot tell you where it is. So `build_programme` takes
 a path, *or* a URL, *or* the literal text — the last of which costs almost nothing, because
@@ -184,14 +197,13 @@ both paths call.
 
 ## 11. Next, after this
 
-- **A `.mcpb` bundle**, once the server has users and the packaging question has an answer.
 - **Publishing to PyPI**, which turns the install line into `uvx mimem-mcp`.
 - **Speech**, which is still M7 and still the thing that makes a programme a programme.
 - **Anki export**, for people who already have a review habit and do not want another one.
 
 ## 12. Done when
 
-- One config block in Claude Desktop or ChatGPT Desktop, and the tools appear.
+- One file installed in Claude Desktop, or one command in ChatGPT Desktop, and the tools appear.
 - A paper can be built, elaborated by the host model, and studied — with the grounding gate
   rejecting an invented number in a test.
 - The review log survives a restart and the scheduler has its own tests.

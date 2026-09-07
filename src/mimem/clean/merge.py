@@ -17,6 +17,24 @@ from mimem.ir import Block, BlockKind, DiagnosticLevel, Document, block_id
 
 MERGEABLE = frozenset({BlockKind.PARAGRAPH})
 
+#: Blocks that may sit *between* two halves of one paragraph without ending it.
+#:
+#: This is the whole reason the module exists and it was the one thing it did not do. A page
+#: break puts a running head and a folio between the two halves, so they are never adjacent, so
+#: they were never merged -- and the seam became a sentence boundary that was never there. On a
+#: ninety-eight page review that left thirty-one beats opening mid-clause: "voltage and
+#: temperature signals, achieving eight to thirteen minutes advanced warning", spoken as if it
+#: were a sentence.
+#:
+#: A textless figure is here for the same reason and is named in the docstring above: artwork
+#: floating in the middle of a column interrupts the text around it without ending it.
+TRANSPARENT = frozenset({BlockKind.PAGE_ARTIFACT, BlockKind.FIGURE})
+
+
+def _transparent(block: Block) -> bool:
+    return block.kind in TRANSPARENT and not (block.kind is BlockKind.FIGURE and block.text.strip())
+
+
 #: Something that plausibly ends a paragraph. A lone reference marker or a hyphen does not.
 _TERMINAL = re.compile(r"[.!?:;]['\")\]]?\s*$")
 _ENDS_OPEN = re.compile(r"[-,(\[]\s*$")
@@ -39,14 +57,23 @@ def _continues(prev: Block, nxt: Block) -> bool:
     return bool(_STARTS_LOWER.match(right))
 
 
+def _last_mergeable(blocks: list[Block]) -> Block | None:
+    """The most recent block a paragraph could continue from, looking past page furniture."""
+    for block in reversed(blocks):
+        if _transparent(block):
+            continue
+        return block
+    return None
+
+
 def merge_continuations(doc: Document) -> Document:
-    """Merge adjacent paragraph blocks that are really one paragraph."""
+    """Merge paragraph blocks that are really one paragraph, across the page furniture between."""
     merged_blocks: list[Block] = []
     merges = 0
 
     for block in doc.blocks:
-        if merged_blocks and _continues(merged_blocks[-1], block):
-            prev = merged_blocks[-1]
+        prev = _last_mergeable(merged_blocks)
+        if prev is not None and _continues(prev, block):
             sources = list(prev.attrs.get("merged_from") or [prev.id])
             sources.append(block.id)
             joiner = "" if prev.text.rstrip().endswith("-") else " "

@@ -19,6 +19,7 @@ from mimem.concepts import build as build_registry
 from mimem.config import Listener, Profile
 from mimem.elaborate import ElaborationReport, elaborate
 from mimem.ingest import load
+from mimem.ingest.crops import render_figures
 from mimem.ir import ConceptRegistry, Document, Script
 from mimem.lint import Bundle, LintReport, lint_all
 from mimem.llm.client import Client
@@ -102,14 +103,22 @@ def build_all(
     doc = triage(clean(load(source)))
 
     registry = build_registry(doc, listener)
+
+    # Crops first. study.md links them, and stage 6 *sends* them -- a figure cannot be described
+    # from a picture that has not been rendered yet. Failing to render one costs a picture and
+    # nothing else; the audio track never mentions a file.
+    out_dir.mkdir(parents=True, exist_ok=True)
+    render_figures(doc, out_dir)
+
     elaboration = None
     if client is not None:
-        elaboration = elaborate(doc, registry, profile, listener, client, budget=budget)
+        elaboration = elaborate(
+            doc, registry, profile, listener, client, budget=budget, out_dir=out_dir
+        )
 
     script = plan(doc, registry, profile, listener)
     artefacts = render(script, doc)
 
-    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
     (out_dir / "registry.json").write_text(registry.to_json(), encoding="utf-8")
     (out_dir / "script.json").write_text(script.to_json(), encoding="utf-8")
@@ -137,6 +146,7 @@ def replan(out_dir: Path, profile: Profile, listener: Listener | None = None) ->
     doc = Document.from_json((out_dir / "doc.ir.json").read_bytes())
     registry = ConceptRegistry.from_json((out_dir / "registry.json").read_bytes())
     script = plan(doc, registry, profile, listener)
+    render_figures(doc, out_dir)
     artefacts = render(script, doc)
 
     (out_dir / "script.json").write_text(script.to_json(), encoding="utf-8")

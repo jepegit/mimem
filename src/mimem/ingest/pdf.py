@@ -50,8 +50,20 @@ GUTTER_RATIO = 0.035
 #: Minimum characters extracted before we believe the PDF has a real text layer.
 MIN_TEXT_LAYER_CHARS = 200
 
+#: A caption, and not a sentence that happens to open with a figure number.
+#:
+#: The delimiter after the numeral is the whole discriminator. A caption writes "Figure 6." or
+#: "Figure 6:"; running prose writes "Figure 6 exemplifies how transfer learning...", and
+#: without the delimiter that sentence was classified as a caption -- which both lost it as
+#: prose and gave the figure a second, wrong caption. Length cannot separate the two: the false
+#: caption in the paper that found this is 45 words, and the real captions run from 5 to 88 with
+#: one of them also 45.
+#: A dash counts only when it is spaced. "Fig. 3 - Capacity against cycle number" is a caption;
+#: "Figures 3-5 show that capacity falls" is a reference to a range, and the space is what tells
+#: them apart.
 CAPTION_RE = re.compile(
-    r"^\s*(fig(?:ure)?|table|scheme|chart|plate|eq(?:uation)?)\s*\.?\s*(\d+|[IVXLC]+)\b",
+    r"^\s*(fig(?:ure)?|table|scheme|chart|plate|eq(?:uation)?)\s*\.?\s*(\d+|[IVXLC]+)"
+    r"(?:\s*[.:)]|\s+[-–—]\s+)",
     re.IGNORECASE,
 )
 NUMBERED_HEADING_RE = re.compile(r"^\s*(\d+(?:\.\d+)*)\.?\s+(\S.*)$")

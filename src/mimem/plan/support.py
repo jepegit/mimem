@@ -178,7 +178,16 @@ def best_sentence(
     """
     best: Support | None = None
     for block in blocks:
-        if block.kind in {BlockKind.HEADING, BlockKind.REFERENCE, BlockKind.PAGE_ARTIFACT}:
+        # Captions are excluded here for the reason they are excluded from the pool, and for one
+        # more: a figure description is stored against its caption, and rule FIG-07's companion
+        # says no card may take its answer from one. Cards come from the pool or from here, so
+        # both doors have to be shut.
+        if block.kind in {
+            BlockKind.HEADING,
+            BlockKind.REFERENCE,
+            BlockKind.PAGE_ARTIFACT,
+            BlockKind.CAPTION,
+        }:
             continue
         weight = _ROLE_WEIGHT.get(block.role, 0.4)
         for start, end in sentences_of(block):
@@ -216,7 +225,16 @@ def gather(
     pool: dict[str, list[Support]] = {cid: [] for cid in concepts}
 
     for block in retained(doc):
-        if block.kind in {BlockKind.HEADING, BlockKind.REFERENCE, BlockKind.PAGE_ARTIFACT}:
+        # A caption is excluded for the same reason a heading is: it is a label, not a claim.
+        # Left in, it became the supporting sentence for a callback -- and since the caption is
+        # also its figure's announcement, the programme said the same words twice and REP-01
+        # caught it.
+        if block.kind in {
+            BlockKind.HEADING,
+            BlockKind.REFERENCE,
+            BlockKind.PAGE_ARTIFACT,
+            BlockKind.CAPTION,
+        }:
             continue
         weight = _ROLE_WEIGHT.get(block.role, 0.4)
         for start, end in sentences_of(block):

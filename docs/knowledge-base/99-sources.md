@@ -178,3 +178,14 @@ against the primary before we lean hard on them.
 - **GROBID** — machine-learning extraction of structured TEI from scholarly PDFs (sections,
   references, figures); the strongest option for papers specifically.
 - **PyMuPDF**, **docling**, **marker** — general PDF-to-structure; **ebooklib** for EPUB.
+- **Awesome-Chart-Understanding** — a maintained bibliography of chart QA, chart captioning and
+  chart-to-table work, including the benchmarks that measure how often a vision model gets a chart
+  *wrong* (CHOCOLATE, CharXiv) and the caption corpora that could score ours (SciCap,
+  Chart-to-Text). <https://github.com/khuangaf/Awesome-Chart-Understanding>
+- **VoiceStudio** — a fully local desktop application wrapping sixteen TTS engines, which exposes a
+  local REST API with **OpenAI-compatible audio endpoints**. Interesting for M7 not as a dependency
+  but as a *shape*: an adapter written against the OpenAI speech endpoint reaches VoiceStudio and
+  several other local servers at once, which is a better target than a Piper-specific adapter.
+  Licensing needs care and mimem must not bundle it — the application is AGPL-3.0 and its default
+  voice weights are CC-BY-NC, so it is a thing a user runs, not a thing mimem ships.
+  <https://github.com/debpalash/VoiceStudio>

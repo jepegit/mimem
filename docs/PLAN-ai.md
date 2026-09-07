@@ -310,29 +310,38 @@ automatically:
 Then a human reads it. Criterion 5 is the one that turns this from "generate plausible code" into
 something trustworthy, and it only works because the corpus exists.
 
-### The negative corpus
+### The negative corpus, and what measuring it changed
 
-The blocker is criterion 3. Today there is no library of *deliberately bad* scripts, so a new
-rule has nothing to prove itself against.
+The blocker is criterion 3: a generated rule needs something it can be shown to fire on.
 
-**This is worth building on its own, and the reason is measurable.** Running the whole suite over
-both corpus documents:
+I first wrote that this did not exist, from a real observation — of thirty rule classes, only
+**six** ever fire on either corpus document, the other 24 being checked and permanently silent
+because the output is good. I concluded that four fifths of the suite was unprotected.
+
+**Then I measured it, and it was not.** `tools/mutate_rules.py` guts one rule's `check()` at a
+time and runs the suite:
 
 | | |
 |---|---|
 | design rules documented | 91 |
-| with a mechanical rule class | **30** |
-| that fire on the corpus | **6** |
-| checked, and permanently silent | **24** |
-| never named in any test | 1 (`STR-08`) |
+| with a mechanical rule class | 30 |
+| that fire on the corpus | 6 |
+| **caught by the suite when broken** | **29** |
+| genuinely unprotected | **1** (`STR-08`) |
 
-The 24 are silent because the output is *good*, which is the system working. But it means that
-for four fifths of the suite, **a rule that broke would look exactly like a rule that passed.**
-Test coverage is not the gap — 29 of 30 ids appear in the tests. The gap is that most rules have
-no input that makes them speak, so nothing distinguishes "correct" from "no longer wired up".
+Broken-input tables already exist, spread across `test_triage_and_lint.py`, `test_script_lint.py`
+and `test_artefact_lint.py`. Silence on a good document says nothing about whether a test would
+notice the rule breaking, and I read the one as evidence about the other.
 
-That is a hole in the project today, independent of anything to do with AI, and it is the
-prerequisite for trusting a generated rule.
+So the prerequisite for §6 is smaller than this plan first claimed, and differently shaped. What
+was missing is not the inputs but the **enforcement**: nothing made a *new* rule come with one,
+because the existing tables are lists someone has to remember to extend. That is now
+`test_every_rule_has_a_trigger`, and it is what criterion 3 can lean on. The tables stay where
+they are.
+
+The lesson generalises past this section and is worth keeping in view for everything else here:
+**a metric that is quiet on correct input tells you nothing about coverage.** `gloss_coverage`
+was a real failure found the same way; this one looked identical and was not.
 
 ### Rule mining as its own product
 
@@ -415,8 +424,10 @@ run stage 6, and `doctor` told them how.
 distinguished in the manifest, `mimem compare`. *Done when:* one command reports what the model
 changed and what it cost, on the same document.
 
-**M10 — the negative corpus (0.5 week).** One broken script per rule; `mimem rule test`. *Done
-when:* all thirty rules are known to still fire, not merely to stay silent.
+**M10 — rule-trigger enforcement (mostly done).** Largely landed already: every rule now has a
+trigger and a reflection test that fails when a new rule arrives without one. What remains is
+`mimem rule test` as a command rather than a pytest run. *Done when:* a rule cannot be merged,
+by hand or by model, without an input that proves it fires.
 
 **M11 — rule authoring (1 week).** `mimem critic`, `mimem rule new`, the acceptance checks.
 *Done when:* one rule in the suite was drafted by a model, passed all six criteria, and was
@@ -466,14 +477,19 @@ typed classes with thirty worked examples and a strict type checker over them �
 good codegen target — so the model's job is to write a rule *once* and never run again. The
 runtime critic's job is to find out which rule is worth writing.
 
-**The negative corpus turned out to be a prerequisite, and I had the argument for it wrong until
-I measured.** I wrote that the suite could not tell whether its rules still fire, which is not
-true: 29 of 30 rule ids are named in tests. The real number is sharper and worse. Thirty rule
-classes cover 91 documented design rules, and on both corpus documents **only six of them ever
-fire** — the other 24 are checked and permanently silent, because the output is good. For four
-fifths of the suite a rule that broke would be indistinguishable from a rule that passed. That
-is a hole that exists today, has nothing to do with AI, and should probably be filled before
-anything else in this plan.
+**I got the negative-corpus argument wrong twice, and the second time is the instructive one.**
+First I wrote that the suite could not tell whether its rules still fire. Corrected that to a
+sharper claim: only six of thirty rules ever fire on the corpus, so four fifths of the suite
+would not notice a rule breaking. Then I built the instrument and measured it — and **29 of 30
+were already caught**. The inputs existed all along, scattered across three test files.
+
+Silence on correct input is not absence of coverage, and I twice read it as if it were. The
+prerequisite for §6 turned out to be enforcement rather than inputs: nothing made a *new* rule
+arrive with a trigger. That is now a reflection test, and it is what an accepted generated rule
+can lean on.
+
+I am leaving the whole sequence in the document rather than tidying it into the conclusion,
+because the same inference is available from the same observation to whoever reads this next.
 
 **Degradation is not one thing.** "The model was unavailable" currently covers no key, network
 failure, quota refusal and budget exhaustion. Those need four different sentences, because they

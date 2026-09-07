@@ -202,3 +202,14 @@ def test_report_summarises_by_rule() -> None:
     report = lint("Values 1, 2 and 3 with [4].")
     assert "NUM-02" in report.summary()
     assert not report.ok
+
+
+def test_a_row_of_panel_labels_is_dropped() -> None:
+    """Lifted out of a figure, it is a legend for regions of a picture and carries no sentence.
+    Narrated, it became "a, b, c, d, e, f." spoken aloud."""
+    from mimem.ir import Block, BlockKind
+    from mimem.triage.rules import _decide
+
+    decision = _decide(Block(id="b", kind=BlockKind.PARAGRAPH, text="(a) (b) (c) (d) (e) (f)"))
+    assert decision.action is TriageAction.DROP
+    assert decision.reason == "panel labels"

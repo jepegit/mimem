@@ -76,6 +76,54 @@ def test_a_trailing_abbreviation_does_not_end_a_paragraph() -> None:
     assert len(doc.blocks) == 1
 
 
+def test_merging_reaches_across_the_running_head_at_a_page_break() -> None:
+    """The case the module exists for, and the one it did not handle.
+
+    A page break puts a running head and a folio between the two halves of a paragraph, so they
+    are never adjacent. On a ninety-eight page review that left thirty-one beats opening
+    mid-clause -- "voltage and temperature signals, achieving eight to thirteen minutes advanced
+    warning", spoken as though it were a sentence.
+    """
+    doc = _paragraphs("Machine learning offers a new paradigm for", "voltage and temperature.")
+    for i, (kind, text) in enumerate(
+        (
+            (BlockKind.PAGE_ARTIFACT, "https://doi.org/10.3390/x"),
+            (BlockKind.PAGE_ARTIFACT, "5 of 35"),
+        )
+    ):
+        doc.blocks.insert(1 + i, Block(id=f"a{i}", kind=kind, text=text, order=0, page=1))
+    doc.renumber()
+
+    merged = merge_continuations(doc)
+    paragraphs = [b for b in merged.blocks if b.kind is BlockKind.PARAGRAPH]
+    assert len(paragraphs) == 1
+    assert (
+        paragraphs[0].text == "Machine learning offers a new paradigm for voltage and temperature."
+    )
+    assert len([b for b in merged.blocks if b.kind is BlockKind.PAGE_ARTIFACT]) == 2
+
+
+def test_merging_reaches_across_a_floating_figure() -> None:
+    """Named in the module docstring: artwork in the middle of a column interrupts the text
+    around it without ending it. A figure block carries no text of its own."""
+    doc = _paragraphs("the interphase keeps growing because", "each repair costs lithium.")
+    doc.blocks.insert(1, Block(id="f", kind=BlockKind.FIGURE, text="", order=0, page=1))
+    doc.renumber()
+
+    paragraphs = [b for b in merge_continuations(doc).blocks if b.kind is BlockKind.PARAGRAPH]
+    assert len(paragraphs) == 1
+
+
+def test_merging_does_not_reach_across_a_caption() -> None:
+    """A caption is real text and belongs to the figure, not to the paragraph around it."""
+    doc = _paragraphs("the process is", "self-limiting.")
+    doc.blocks.insert(
+        1, Block(id="c", kind=BlockKind.CAPTION, text="Figure 1. A cell.", order=0, page=1)
+    )
+    doc.renumber()
+    assert len([b for b in merge_continuations(doc).blocks if b.kind is BlockKind.PARAGRAPH]) == 2
+
+
 def test_merging_does_not_reach_across_a_heading() -> None:
     doc = _paragraphs("the process is", "self-limiting.")
     doc.blocks.insert(

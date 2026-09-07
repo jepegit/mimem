@@ -84,6 +84,13 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(r"^\s*\**\s*key\s?words?\s*\**\s*:", re.I),
     ),
     (
+        # A row of panel labels lifted out of a figure: "(a) (b) (c) (d)". It is a legend for
+        # regions of a picture and carries no sentence at all -- narrated, it becomes "a, b, c,
+        # d, e, f." spoken aloud, which happened.
+        "panel labels",
+        re.compile(r"^\s*[(\[]?[a-h][)\]]?(?:[\s,;]+[(\[]?[a-h][)\]]?){1,7}\s*$", re.I),
+    ),
+    (
         # "Supplemental information can be found online at ..." -- a pointer to something the
         # listener cannot follow, ending in an identifier that must never be spoken (NUM-05).
         "pointer to material the listener cannot reach",

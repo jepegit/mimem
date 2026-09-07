@@ -192,6 +192,10 @@ mechanical layer only — it measures whether the output still has the propertie
 for, *not* whether anyone learned anything; the layers that would answer that need a model and
 then people. Both are written down in [the plan](docs/PLAN-part1.md).
 
+A third, smaller one: the **corpus is one document**. That is enough to catch a verbalizer
+regression and not enough to measure spacing, which is why the harness now records how many
+concepts each spacing number was averaged over.
+
 What the measuring found immediately, on mimem's own output: **no term is ever defined unless you
 turn the elaboration layer on**, and **half the recurring concepts have gaps that shrink rather
 than grow**. Neither breaks a rule. Both are now numbers in a file that CI watches.

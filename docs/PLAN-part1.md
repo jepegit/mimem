@@ -819,6 +819,51 @@ dependency at all, which is deliberate.
 
 ---
 
+## 7a. What the evaluation found, once it was believed
+
+The harness was written in M6 and reported two numbers that looked like failures. Both were
+chased down after part one was complete, and they turned out to be different kinds of thing.
+
+**`gloss_coverage: 0.00` was real, and worse than it looked.** It was not a scoring drift: rule
+`STR-03`'s term pre-load *never happened at all* on a build without a model. `preload_terms`
+will only offer a concept that has a definition, an acronym or a symbol; `short_def` was set
+only by the elaboration layer and by a pattern matching single-letter symbols; so a paper whose
+vocabulary is ordinary noun phrases had none of the three and the pre-load was empty. Every
+free build opened by promising terms and defining none. The extractor had been matching
+definitional sentences all along -- to decide that something *was* a term -- and discarding the
+definition in the same line.
+
+The fix needs no model, because the paper wrote the definition already. `mimem.concepts.
+definitions` takes it, span-backed, and the number is now `0.18` on the fixture.
+
+**Precision was the whole problem, and the bare comma appositive is what taught it.** Matching
+"X is Y" is trivial and almost always wrong. The shape with no connective -- *X, something,
+...* -- looked like the richest source and produced, on a 98-page review, six definitions of
+which one was right: "working conditions" defined as "with a false alarm rate reduced by about
+20-40%", "battery TR" as "feature extraction of electrical signals is essential". Every guard
+added for it caught the previous example and let the next one through, because a comma pair in
+scientific prose brackets whatever the author felt like bracketing. It was removed. Parentheses
+stayed, because an author who writes "(...)" is glossing rather than aside-ing. The result is
+low coverage -- one or two terms a paper -- and that is the correct trade: a wrong definition
+spoken with confidence in the first minute is the failure the whole grounding apparatus exists
+to prevent, arriving through a door nobody was watching.
+
+**`intervals_expanding: 0.50` was the metric, not the scheduler.** The scheduler already
+refuses to let an interval shrink; what the metric measured was every *episode*, and a concept
+whose recurrences are the prompts that close its sections is spaced by `STR-06`, not by the
+spacing scheduler. The linter had always drawn that line -- a callback inside the minimum gap is
+an error, a structural prompt is a warning -- and the metric had not. It does now, and reads
+`1.00`.
+
+It was found by a false alarm rather than by inspection: adding definitions changed concept
+difficulty, which changed one concept's repetition count, which took it from three exposures to
+two, which moved the metric from 0.50 to 0.00 and failed the baseline. **The denominator was
+two concepts.** `recurring_concepts` is now recorded alongside it, so a fraction computed from
+one document's worth of nothing says so in the diff. The real limitation is the corpus: one
+document is not enough to measure spacing, and no amount of care in the metric fixes that.
+
+---
+
 ## 8. Evaluation — how we know any of this works
 
 Three layers, in increasing cost and increasing truth.

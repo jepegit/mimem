@@ -11,6 +11,7 @@ there is a test that the launch command has not quietly become something else.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import zipfile
 from pathlib import Path
@@ -21,11 +22,19 @@ from mimem.assistant.workspace import WORKSPACE_ENV
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "packaging" / "manifest.json"
+REPO = "https://github.com/jepegit/mimem"
 
 
 @pytest.fixture(scope="module")
 def manifest() -> dict:
     return json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+
+def _registered(listing: str) -> set[str]:
+    """The names the running server actually answers with, via the SDK's own registry."""
+    from mimem.assistant import server
+
+    return {item.name for item in asyncio.run(getattr(server.mcp, listing)())}
 
 
 def test_the_manifest_has_what_a_host_requires(manifest: dict) -> None:
@@ -46,7 +55,20 @@ def test_the_launch_command_starts_the_server_we_ship(manifest: dict) -> None:
     config = manifest["server"]["mcp_config"]
     assert config["command"] == "uvx"
     assert "mimem-mcp" in config["args"], "the console entry point is what must be launched"
-    assert "git+https://github.com/jepegit/mimem" in config["args"]
+    assert f"git+{REPO}@v{manifest['version']}" in config["args"]
+
+
+def test_the_launch_command_is_pinned_to_this_version(manifest: dict) -> None:
+    """An unpinned ``--from`` resolves to whatever is on main at first start.
+
+    Which means a bundle labelled 0.1.0, downloaded from the 0.1.0 release, installs code that
+    was written after it -- and the version the user is shown is then a number with nothing
+    behind it. The tag in the ref is asserted against the manifest version rather than merely
+    being present, so a release that forgets to move it fails here instead of silently
+    shipping the previous version's code.
+    """
+    ref = next(arg for arg in manifest["server"]["mcp_config"]["args"] if arg.startswith("git+"))
+    assert ref.endswith(f"@v{manifest['version']}"), f"{ref} is not pinned to this version"
 
 
 def test_the_settings_form_covers_what_the_server_reads(manifest: dict) -> None:
@@ -58,17 +80,25 @@ def test_the_settings_form_covers_what_the_server_reads(manifest: dict) -> None:
         assert key in manifest["user_config"], f"{placeholder} has no user_config entry"
 
 
-def test_every_declared_tool_exists(manifest: dict) -> None:
-    """A host lists these before it starts the server, so a stale one is a visible lie."""
-    from mimem.assistant import server
+def test_the_declared_tools_are_exactly_the_registered_ones(manifest: dict) -> None:
+    """A host lists these before it starts the server, so a stale one is a visible lie.
 
+    This assertion used to be ``declared <= actual`` against every public callable in the
+    module, which is two weaknesses at once. It could not see a tool the server registers and
+    the manifest omits -- and that is the direction the drift actually went: ``next_figure``
+    shipped registered and undeclared, so the install screen offered ten tools and the server
+    answered eleven. Comparing against ``dir(server)`` was the reason the looser direction was
+    chosen, because that set also contains the prompts and every helper. Asking the registry
+    costs one ``list_tools`` call and makes equality the natural thing to assert.
+    """
     declared = {tool["name"] for tool in manifest["tools"]}
-    actual = {
-        name
-        for name in dir(server)
-        if callable(getattr(server, name, None)) and not name.startswith("_")
-    }
-    assert declared <= actual, f"declared but missing: {sorted(declared - actual)}"
+    assert declared == _registered("list_tools")
+
+
+def test_the_declared_prompts_are_exactly_the_registered_ones(manifest: dict) -> None:
+    """Prompts appear in the host's own menu, and drift the same way tools do."""
+    declared = {prompt["name"] for prompt in manifest["prompts"]}
+    assert declared == _registered("list_prompts")
 
 
 def test_building_produces_an_installable_zip() -> None:

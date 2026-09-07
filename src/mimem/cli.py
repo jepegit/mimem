@@ -48,6 +48,10 @@ from mimem.plan import plan as run_plan
 from mimem.render import narrate as run_narrate
 from mimem.render import render as run_render
 from mimem.render import render_audio
+from mimem.speak import ENGINES, AudioError, EngineError, EngineOptions, SpeechChunk, Synthesis
+from mimem.speak import create as create_engine
+from mimem.speak import speech_chunks as run_speech_chunks
+from mimem.speak import synthesize as run_synthesize
 from mimem.triage import drop_report
 from mimem.triage import triage as run_triage
 
@@ -539,12 +543,20 @@ def build(
         bool, typer.Option("--llm/--local", help="call a model for stage 6, or skip it")
     ] = False,
     budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
+    speak_with: Annotated[
+        str | None,
+        typer.Option("--speak", help=f"also synthesise audio; one of: {', '.join(ENGINES)}"),
+    ] = None,
+    voice: Annotated[str | None, typer.Option("--voice", help="engine's own voice name")] = None,
 ) -> None:
     """The whole pipeline: source document to a listenable, checkable programme.
 
     Stage 6 is off by default. With ``--local`` you get the paper said in a way you can follow,
     with the questions and the spacing that make it stick; with ``--llm`` you also get the
     glosses, the concrete anchors and the analogies, and a bill.
+
+    With ``--speak`` it goes all the way to a WAV file, which is the whole of milestone M7:
+    one command from a PDF to something you can play.
     """
     settings = Settings()
     profile, listener = _profile_and_listener(profile_name, listener_file, settings)
@@ -572,8 +584,117 @@ def build(
     _print_script_summary(result.script, profile)
 
     _report_lint(result.lint)
+
+    if speak_with is not None:
+        # After the lint report, and only if it passed. Synthesising a script that broke a rule
+        # would spend time or money producing audio with a known defect in it, and the whole
+        # point of the linter's non-zero exit is that a bad script does not get used quietly.
+        if not result.lint.ok:
+            console.print(
+                "[yellow]not synthesising[/]: the script has lint errors. "
+                "Fix them, or run `mimem speak` on it deliberately.",
+            )
+        else:
+            try:
+                engine = create_engine(speak_with, EngineOptions(voice=voice))
+                synthesis = run_synthesize(result.script, engine, out_dir=out_dir)
+            except (EngineError, AudioError, ValueError) as exc:
+                _fail(str(exc))
+                return
+            for path in synthesis.write(out_dir):
+                console.print(f"[green]wrote[/] {path}")
+            _print_synthesis(synthesis)
+
     if not result.lint.ok:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def speak(
+    target: Annotated[Path, typer.Argument(help="script JSON, or a directory containing one")],
+    engine_name: Annotated[
+        str, typer.Option("--engine", "-e", help=f"one of: {', '.join(ENGINES)}")
+    ] = "silent",
+    out_dir: Annotated[
+        Path | None, typer.Option("--out", "-o", help="where to write; defaults beside the script")
+    ] = None,
+    voice: Annotated[str | None, typer.Option("--voice", help="engine's own voice name")] = None,
+    model: Annotated[
+        str | None, typer.Option("--model", help="piper voice file, or TTS model")
+    ] = None,
+    base_url: Annotated[
+        str | None, typer.Option("--base-url", help="for --engine openai; any compatible server")
+    ] = None,
+    rate: Annotated[int, typer.Option("--rate", help="SAPI speaking rate, -10 to 10")] = 0,
+    use_cache: Annotated[
+        bool, typer.Option("--cache/--no-cache", help="reuse audio for unchanged beats")
+    ] = True,
+) -> None:
+    """Stage 9: the script as a playable file, with the pauses actually in it.
+
+    The silences that carry retrieval time are inserted here rather than requested from the
+    engine, so every engine produces the same pauses in the same places and only the voice
+    differs (rule TTS-05).
+
+    Beats are cached by content, so fixing one sentence re-synthesises one beat.
+    """
+    script = _read_script(_script_path(target))
+    destination = out_dir or (target if target.is_dir() else target.parent)
+    try:
+        engine = create_engine(
+            engine_name,
+            EngineOptions(voice=voice, model=model, rate=rate, base_url=base_url),
+        )
+    except EngineError as exc:
+        _fail(str(exc))
+        return
+
+    chunks = len(run_speech_chunks(script))
+    console.print(f"synthesising [bold]{chunks}[/] beats with [bold]{engine.name}[/]")
+    with console.status("speaking...") as status:
+
+        def tick(index: int, total: int, chunk: SpeechChunk, reused: bool) -> None:
+            mark = "cached" if reused else "spoke"
+            status.update(f"{mark} {index + 1}/{total}  {chunk.text[:60]}")
+
+        try:
+            result = run_synthesize(
+                script, engine, out_dir=destination, use_cache=use_cache, progress=tick
+            )
+        except (EngineError, AudioError) as exc:
+            _fail(str(exc))
+            return
+        except ValueError as exc:
+            _fail(str(exc))
+            return
+
+    for path in result.write(destination):
+        console.print(f"[green]wrote[/] {path}")
+    _print_synthesis(result)
+
+
+@app.command()
+def voices(
+    engine_name: Annotated[
+        str, typer.Option("--engine", "-e", help=f"one of: {', '.join(ENGINES)}")
+    ] = "sapi",
+) -> None:
+    """What this engine can sound like."""
+    try:
+        engine = create_engine(engine_name)
+        found = engine.voices()
+    except EngineError as exc:
+        _fail(str(exc))
+        return
+    if not found:
+        console.print(
+            f"{engine_name} cannot list its voices; pass one with --voice or --model", style="dim"
+        )
+        return
+    table = Table("voice", "name", "locale")
+    for v in found:
+        table.add_row(v.id, v.name, v.locale)
+    console.print(table)
 
 
 @app.command("eval")
@@ -753,6 +874,30 @@ def _print_script_summary(script: Script, profile: Profile) -> None:
         console.print(f"  [yellow]note[/] {note}", style="dim")
     if script.dropped:
         console.print(f"  {len(script.dropped)} beats cut to fit the budget", style="dim")
+
+
+def _print_synthesis(result: Synthesis) -> None:
+    """What the audio actually turned out to be, against what was predicted.
+
+    The drift line is the interesting one. Every duration in this project up to now has been a
+    word count divided by a words-per-minute figure from the profile; this is the first time
+    the pipeline can say what the programme really runs to, and whether ``SEG-01``'s segment
+    bounds were being checked against a number that bears any relation to speech.
+    """
+    minutes = result.seconds / 60
+    console.print(
+        f"  [bold]{minutes:.1f} min[/] of audio, {result.synthesised} beats synthesised, "
+        f"{result.reused} reused from cache",
+        style="dim",
+    )
+    predicted = result.estimated_seconds / 60
+    drift = result.drift
+    direction = "over" if drift >= 0 else "under"
+    share = abs(drift) / result.estimated_seconds * 100 if result.estimated_seconds else 0.0
+    console.print(
+        f"  predicted {predicted:.1f} min, so {abs(drift) / 60:.1f} min {direction} ({share:.0f}%)",
+        style="dim",
+    )
 
 
 def _report_lint(report: LintReport, examples: int = 3) -> None:

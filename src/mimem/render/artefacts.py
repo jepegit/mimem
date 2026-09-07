@@ -295,7 +295,7 @@ def render_manifest(script: Script, doc: Document | None = None) -> str:
             "rules": beat.rules,
         }
         for beat, at in script.timeline()
-        if beat.text.strip()
+        if beat.spoken
     ]
     payload = {
         "schema_version": script.schema_version,

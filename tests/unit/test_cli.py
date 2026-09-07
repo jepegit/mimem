@@ -109,3 +109,44 @@ def test_lint_on_a_bare_audio_file_says_what_it_cannot_check(tmp_path: Path) -> 
     result = runner.invoke(app, ["lint", str(audio)])
     assert result.exit_code == 0
     assert "text rules only" in result.stdout
+
+
+def test_build_can_go_all_the_way_to_audio(paper_pdf: Path, tmp_path: Path) -> None:
+    """Milestone M7's acceptance test: one command, PDF to a playable file."""
+    import wave
+
+    out = tmp_path / "programme"
+    result = runner.invoke(app, ["build", str(paper_pdf), "--out", str(out), "--speak", "silent"])
+    assert result.exit_code == 0, result.stdout
+    assert (out / "audio.wav").exists()
+    assert (out / "timings.json").exists()
+    with wave.open(str(out / "audio.wav")) as handle:
+        assert handle.getnframes() > 0
+    assert "of audio" in result.stdout
+
+
+def test_speak_runs_on_a_programme_directory(paper_pdf: Path, tmp_path: Path) -> None:
+    """`mimem speak out/paper` finds the script itself, like `explain` does."""
+    out = tmp_path / "programme"
+    assert runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)]).exit_code == 0
+    assert not (out / "audio.wav").exists()
+
+    result = runner.invoke(app, ["speak", str(out), "--engine", "silent"])
+    assert result.exit_code == 0, result.stdout
+    assert (out / "audio.wav").exists()
+
+
+def test_speaking_twice_reuses_the_cache(paper_pdf: Path, tmp_path: Path) -> None:
+    out = tmp_path / "programme"
+    runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)])
+    runner.invoke(app, ["speak", str(out), "--engine", "silent"])
+    again = runner.invoke(app, ["speak", str(out), "--engine", "silent"])
+    assert "0 beats synthesised" in again.stdout
+
+
+def test_an_unknown_engine_is_a_clean_error(paper_pdf: Path, tmp_path: Path) -> None:
+    out = tmp_path / "programme"
+    runner.invoke(app, ["build", str(paper_pdf), "--out", str(out)])
+    result = runner.invoke(app, ["speak", str(out), "--engine", "nope"])
+    assert result.exit_code == 1
+    assert "unknown engine" in result.stdout + str(result.stderr or "")

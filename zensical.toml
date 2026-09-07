@@ -17,6 +17,7 @@ nav = [
     "listening/assistant.md",
     "listening/install.md",
     "listening/first-paper.md",
+    "listening/audio.md",
     "listening/tuning.md",
   ] },
   { "The science" = [

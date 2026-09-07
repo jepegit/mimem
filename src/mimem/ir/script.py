@@ -170,6 +170,18 @@ class Beat(Base):
         return self.est_seconds + self.pause_after
 
     @property
+    def spoken(self) -> bool:
+        """Does this beat become a chunk of audio?
+
+        A beat with no text is a pause that a neighbour owns, and it must not become a chunk:
+        an engine handed an empty string returns either nothing or a click. This lives on the
+        model because two stages ask the question -- the manifest's chunk list and the
+        synthesiser's -- and if they ever disagreed, the audio would not match the audit trail
+        that claims to describe it.
+        """
+        return bool(self.text.strip())
+
+    @property
     def needs_span(self) -> bool:
         """Rule GRD-01: does this beat have to point at the source?"""
         return self.type not in GENERATED_TYPES

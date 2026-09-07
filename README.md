@@ -175,8 +175,7 @@ If you are not sure whether an idea is welcome, it is. Open an issue and ask.
 
 ## Where it is up to
 
-Part 1 — document in, script out — is built. Part 2 — speech synthesis, playback and review across
-sessions — is not.
+Part 1 — document in, audio out — is built. Part 2 — playback and review across sessions — is not.
 
 | | |
 |---|---|
@@ -185,7 +184,7 @@ sessions — is not.
 | ✅ **M4** | The planner: segments, questions, pauses, the spacing scheduler, four artefacts. |
 | ✅ **M5** | The optional elaboration layer, and the grounding gate that makes it trustable. |
 | ✅ **M6** | The complete lint suite, and an evaluation harness — the first time any of this gets *measured* rather than argued from the literature. |
-| ⬜ **M7** | The hand-off to a speech engine. One command from PDF to something you can play. |
+| ✅ **M7** | The hand-off to a speech engine. `mimem build paper.pdf --speak sapi` ends in a WAV you can play. |
 
 Two things you should know before trusting it. The **live API adapter has never been run** (there
 was no key in the environment it was written in). And the evaluation that now exists is the

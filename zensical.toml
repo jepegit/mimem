@@ -38,6 +38,7 @@ nav = [
     "PLAN-part1.md",
     "PLAN-assistant.md",
     "PLAN-figures.md",
+    "PLAN-ai.md",
   ] },
   { "Reference" = [
     "reference/cli.md",

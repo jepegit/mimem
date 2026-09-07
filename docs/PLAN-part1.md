@@ -788,9 +788,31 @@ nothing left to split on. Only a *multi-level* number starts a new heading, beca
 Introduction" on its own line is far more likely to be a list item, and splitting a list into
 headings would invent sections. Three on that paper, and none left.
 
-**M7 — TTS handoff (0.5 week).** Chunked output with stable IDs, an ElevenLabs-shaped adapter and a
-local-engine adapter (Piper/Kokoro) for cheap iteration, break-marker rendering. *Done when:* one
-document goes from PDF to a playable audio file in one command — the bridge into Part 2.
+**M7 — TTS handoff (0.5 week). Done.** Chunked output with stable IDs, four adapters, and
+break-marker rendering. *Done when:* one document goes from PDF to a playable audio file in one
+command — the bridge into Part 2. `mimem build paper.pdf --speak sapi` does that.
+
+Three things came out differently from the sketch. The **ElevenLabs-shaped adapter became an
+OpenAI-shaped one**: `POST /audio/speech` is what OpenAI, VoiceStudio and several self-hosted
+servers all implement, so one adapter reaches all of them, and it is twenty lines of `urllib`
+rather than an SDK in the base install. A **`silent` engine** was added and turned out to matter
+more than expected — it is the only engine the CI runners have, and it is how you see a
+programme's true length and shape before paying anything to voice it. And a **`sapi` adapter**,
+which the plan never mentioned, because Windows already has a speech synthesiser and a free
+voice that needs no key, no download and no network is the fastest way to hear whether the
+pauses land where thinking happens.
+
+**Break markers are not sent to the engine.** `TTS-02` forbids relying on prosody tags, so the
+pauses are inserted as actual silence during assembly, identically for every adapter. That is
+what makes `TTS-05`'s "engine choice must not change the content" testable rather than a hope:
+two engines produce the same beats with the same gaps and differ only in timbre.
+
+**First measurement of the duration arithmetic.** Every duration in this project was, until now,
+a word count divided by the profile's words-per-minute. A 19.9-minute programme through SAPI ran
+**4% longer** than predicted, with a median per-beat drift of +0.75 s — the estimator is
+consistently a little short. `SEG-01`'s segment bounds are therefore being checked against a
+number that is close but biased, and `timings.json` now records the real figures next to the
+predicted ones on every run.
 
 Roughly 9 weeks of focused part-time work; M1–M4 are the load-bearing half and contain no LLM
 dependency at all, which is deliberate.

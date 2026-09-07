@@ -36,7 +36,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/jepegit/mimem",
+        "git+https://github.com/jepegit/mimem@v0.1.0",
         "--with",
         "mcp",
         "mimem-mcp"
@@ -90,6 +90,10 @@
     {
       "name": "elaboration_plan",
       "description": "What the programme would like explained: glosses, concrete anchors, analogies."
+    },
+    {
+      "name": "next_figure",
+      "description": "One figure from a programme, as an image, for you to describe aloud."
     },
     {
       "name": "apply_elaborations",

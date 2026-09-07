@@ -16,6 +16,7 @@
       "gloss_coverage": 0.0,
       "concepts_spaced": 0.0,
       "intervals_expanding": 1.0,
+      "recurring_concepts": 0,
       "median_gap_minutes": 0.0,
       "grounded": 1.0,
       "values_kept": 1.0,
@@ -28,21 +29,22 @@
       "lint_warnings": 25,
       "rules_checked": 30,
       "rules_skipped": 0,
-      "minutes": 19.22,
+      "minutes": 19.25,
       "budget_minutes": 19.29,
-      "budget_used": 0.996,
+      "budget_used": 0.998,
       "sections": 6,
       "segments": 12,
-      "beats": 89,
+      "beats": 91,
       "cards": 10,
-      "gloss_coverage": 0.0,
+      "gloss_coverage": 0.182,
       "concepts_spaced": 0.545,
-      "intervals_expanding": 0.5,
-      "median_gap_minutes": 6.28,
+      "intervals_expanding": 1.0,
+      "recurring_concepts": 1,
+      "median_gap_minutes": 7.84,
       "grounded": 1.0,
       "values_kept": 1.0,
       "words_retained": 0.89,
-      "prompts_per_minute": 0.832
+      "prompts_per_minute": 0.831
     }
   ]
 }

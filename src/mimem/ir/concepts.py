@@ -106,6 +106,10 @@ class Concept(Base):
     kind: ConceptKind = ConceptKind.UNKNOWN
 
     short_def: str | None = None  # one line, for the term pre-load (rule PRE-01)
+    #: Where ``short_def`` came from, when it came from the document rather than a model. A
+    #: pre-load beat states what a term means, which is a claim about the paper, and rule
+    #: ``GRD-01`` says a claim about the paper must be able to point at where it was made.
+    definition_span: Span | None = None
     long_def: str | None = None
     anchor: Anchor | None = None
     analogy: Analogy | None = None

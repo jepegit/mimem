@@ -17,6 +17,7 @@ refreshed when the source changes.
 
 from __future__ import annotations
 
+from mimem.concepts import definitions
 from mimem.concepts.extract import extract
 from mimem.concepts.scoring import score
 from mimem.config import Listener
@@ -38,6 +39,8 @@ def build(
     for concept in concepts:
         registry.add(concept)
 
+    _attach_definitions(doc, registry)
+
     if previous is not None:
         merge(registry, previous)
 
@@ -51,6 +54,31 @@ def build(
     if "concepts" not in doc.stages:
         doc.stages.append("concepts")
     return registry
+
+
+def _attach_definitions(doc: Document, registry: ConceptRegistry) -> None:
+    """Give each concept the definition the paper wrote for it, where there is one.
+
+    Rule ``STR-03``'s pre-load asks for terms established before the exposition starts, and
+    :func:`preload_terms` will only offer a concept that has a definition, an acronym or a
+    symbol. Without this, a paper whose vocabulary is ordinary noun phrases had none of the
+    three, and the pre-load was empty on every build that did not pay a model to write one --
+    which the harness had been reporting as ``gloss_coverage: 0.00`` all along.
+
+    A hand-written definition always wins: the registry is editable on purpose, and a
+    correction should not be undone by the next run.
+    """
+    wanted = [c.canonical for c in registry.concepts.values() if not c.short_def]
+    if not wanted:
+        return
+    found = definitions.find(doc, wanted)
+    for concept in registry.concepts.values():
+        definition = found.get(concept.canonical)
+        if definition is not None and not concept.short_def:
+            concept.short_def = definition.text
+            # The span is what makes this sayable at all: rule GRD-01 wants every claim about
+            # the document to point at where it came from, and a pre-load beat is a claim.
+            concept.definition_span = definition.span
 
 
 def merge(fresh: ConceptRegistry, previous: ConceptRegistry) -> ConceptRegistry:

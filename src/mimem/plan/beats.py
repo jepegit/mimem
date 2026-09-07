@@ -408,7 +408,9 @@ def preload_beats(factory: BeatFactory, terms: list[tuple[Concept, str]]) -> lis
     beats = [
         factory.make(
             BeatType.PRELOAD,
-            f"First, {_count(len(terms))} words you'll need.",
+            # "one words you'll need" -- the singular case was unreachable until the extractor
+            # learned to read the paper's own definitions, because the pre-load was always empty.
+            f"First, {_count(len(terms))} word{'' if len(terms) == 1 else 's'} you'll need.",
             rules=["STR-03", "SIG-01"],
             generated=True,
             generator="template:preload-lead",

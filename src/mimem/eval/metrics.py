@@ -35,9 +35,9 @@ from itertools import pairwise
 from pydantic import BaseModel, ConfigDict, Field
 
 from mimem.config import Profile
-from mimem.ir import GENERATED_TYPES, BeatType, Document, Script
+from mimem.ir import GENERATED_TYPES, BeatType, Document, ExposureForm, Script
 from mimem.lint import LintReport
-from mimem.plan.exposure import exposure_log, spaced
+from mimem.plan.exposure import LoggedExposure, exposure_log, spaced
 
 #: A value worth checking survived: it has a decimal part, a unit, or enough digits that speech
 #: had to chunk it. Shared with rule ``NUM-06``, which asks the same question as a pass/fail.
@@ -75,6 +75,8 @@ class Metrics(BaseModel):
     concepts_spaced: float = 0.0
     #: Of the concepts that recur, how many have non-decreasing intervals (rule SPC-02).
     intervals_expanding: float = 0.0
+    #: The denominator of ``intervals_expanding``: how many concepts it averages over.
+    recurring_concepts: int = 0
     median_gap_minutes: float = 0.0
     #: Beats that can point at a page, of those required to (rule GRD-01).
     grounded: float = 0.0
@@ -147,6 +149,7 @@ def measure(
         gloss_coverage=_gloss_coverage(script, episodes),
         concepts_spaced=_concepts_spaced(episodes),
         intervals_expanding=_intervals_expanding(episodes),
+        recurring_concepts=_recurring_concepts(episodes),
         median_gap_minutes=round(statistics.median(gaps) / 60.0, 2) if gaps else 0.0,
         grounded=_grounded(script),
         values_kept=_values_kept(script, study),
@@ -158,7 +161,7 @@ def measure(
 # -- the individual measurements -------------------------------------------------------------
 
 
-def _episodes(script: Script, profile: Profile) -> dict[str, list[float]]:
+def _episodes(script: Script, profile: Profile) -> dict[str, list[LoggedExposure]]:
     """When each concept was met, in the same terms rule ``SPC-01`` uses.
 
     Recomputed from the beats via :func:`exposure_log`, and coalesced with the profile's own
@@ -168,26 +171,25 @@ def _episodes(script: Script, profile: Profile) -> dict[str, list[float]]:
     """
     min_gap = profile.spacing.min_gap_minutes * 60.0
     return {
-        concept_id: [e.at_seconds for e in spaced(entries, min_gap)]
-        for concept_id, entries in exposure_log(script).items()
+        concept_id: spaced(entries, min_gap) for concept_id, entries in exposure_log(script).items()
     }
 
 
-def _gloss_coverage(script: Script, episodes: dict[str, list[float]]) -> float:
+def _gloss_coverage(script: Script, episodes: dict[str, list[LoggedExposure]]) -> float:
     met = [script.registry[cid] for cid in episodes if cid in script.registry]
     if not met:
         return 0.0
     return round(sum(1 for c in met if c.short_def) / len(met), 3)
 
 
-def _concepts_spaced(episodes: dict[str, list[float]]) -> float:
+def _concepts_spaced(episodes: dict[str, list[LoggedExposure]]) -> float:
     if not episodes:
         return 0.0
     return round(sum(1 for times in episodes.values() if len(times) > 1) / len(episodes), 3)
 
 
-def _intervals_expanding(episodes: dict[str, list[float]]) -> float:
-    """Of the concepts met three times or more, the fraction whose gaps never shrink (SPC-02).
+def _intervals_expanding(episodes: dict[str, list[LoggedExposure]]) -> float:
+    """Of the concepts the scheduler placed three times or more, how many never shrink (SPC-02).
 
     Shrinking intervals are not a small deviation from expanding ones: they are massed practice
     with extra steps, and massed practice is what the whole design is a reaction to.
@@ -195,22 +197,44 @@ def _intervals_expanding(episodes: dict[str, list[float]]) -> float:
     The tolerance is 10%. The scheduler places exposures at real beat boundaries, not at ideal
     times, so an interval can come back a little short without the schedule having stopped
     expanding -- and a metric that called that a regression would fire on every document.
+
+    **Only shrinks that close on a callback count.** This is the same distinction rule
+    ``SPC-01``'s linter has always made, and it took a false regression to notice the metric was
+    not making it. A callback exists because the spacing scheduler put it there, so a short gap
+    before one is a scheduling failure. An introduction and the prompt that closes its section
+    are placed by ``STR-04`` and ``STR-06``; in a paper whose sections run two minutes they
+    cannot be three minutes apart, and no scheduler can make them so. Counting those measured
+    the length of the document's sections and reported it as the spacing system failing.
     """
-    recurring = [times for times in episodes.values() if len(times) > 2]
+    recurring = [entries for entries in episodes.values() if len(entries) > 2]
     if not recurring:
         return 1.0  # nothing to get wrong; not evidence of anything, but not a regression
     good = 0
-    for times in recurring:
-        intervals = [b - a for a, b in pairwise(times)]
-        if all(b >= a * 0.9 for a, b in pairwise(intervals)):
+    for entries in recurring:
+        intervals = [(b.at_seconds - a.at_seconds, b.form) for a, b in pairwise(entries)]
+        if all(
+            b >= a * 0.9 or form != ExposureForm.CALLBACK.value
+            for (a, _), (b, form) in pairwise(intervals)
+        ):
             good += 1
     return round(good / len(recurring), 3)
 
 
-def _gaps(episodes: dict[str, list[float]]) -> list[float]:
+def _recurring_concepts(episodes: dict[str, list[LoggedExposure]]) -> int:
+    """How many concepts ``intervals_expanding`` is actually an average over.
+
+    A fraction computed from one concept can move from 1.0 to 0.0 because a single concept
+    dropped from three exposures to two, which is what happened the first time the corpus
+    changed underneath it. Recording the denominator puts that in the diff instead of leaving a
+    reviewer to infer it from a number that looks like a collapse.
+    """
+    return sum(1 for entries in episodes.values() if len(entries) > 2)
+
+
+def _gaps(episodes: dict[str, list[LoggedExposure]]) -> list[float]:
     out: list[float] = []
     for times in episodes.values():
-        out.extend(b - a for a, b in pairwise(times))
+        out.extend(b.at_seconds - a.at_seconds for a, b in pairwise(times))
     return out
 
 

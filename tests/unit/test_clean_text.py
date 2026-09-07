@@ -156,3 +156,67 @@ def test_sentence_spans_are_offsets_into_the_original_text() -> None:
 
 def test_empty_text_yields_no_sentences() -> None:
     assert sentence_spans("   \n ") == []
+
+
+# -- stacked headings ---------------------------------------------------------------------------
+
+
+def _heading(text: str) -> Document:
+    return Document(
+        id="d",
+        source=SourceMeta(format="pdf"),
+        blocks=[Block(id="h", kind=BlockKind.HEADING, text=text, order=0, level=1, page=1)],
+    )
+
+
+def test_a_heading_stacked_on_its_subsection_is_split() -> None:
+    """A section heading set directly above its first subsection comes back as one block, and
+    once the lines are joined the section is called "2.3. Core ML Models and Training Strategies
+    2.3.1. Model Architectures and General Workflow"."""
+    from mimem.clean.headings import split_stacked_headings
+
+    doc = split_stacked_headings(
+        _heading("2.3. Core ML Models and Training Strategies\n2.3.1. Model Architectures")
+    )
+    assert [b.text for b in doc.blocks] == [
+        "2.3. Core ML Models and Training Strategies",
+        "2.3.1. Model Architectures",
+    ]
+    assert doc.blocks[1].attrs["split_from"] == "h"
+    assert all(b.kind is BlockKind.HEADING for b in doc.blocks)
+
+
+def test_a_single_level_number_does_not_start_a_new_heading() -> None:
+    """ "1. Introduction" on its own line under a heading is far more likely to be a list item,
+    and splitting a list into headings would invent sections."""
+    from mimem.clean.headings import split_stacked_headings
+
+    doc = split_stacked_headings(_heading("Contents\n1. Introduction\n2. Methods"))
+    assert len(doc.blocks) == 1
+
+
+def test_an_ordinary_heading_is_untouched() -> None:
+    from mimem.clean.headings import split_stacked_headings
+
+    doc = split_stacked_headings(_heading("2.1.4. Gas Signals"))
+    assert len(doc.blocks) == 1
+    assert "split_from" not in doc.blocks[0].attrs
+
+
+def test_only_headings_are_split() -> None:
+    """A paragraph mentioning a subsection number mid-text is not two paragraphs."""
+    from mimem.clean.headings import split_stacked_headings
+
+    doc = Document(
+        id="d",
+        source=SourceMeta(format="pdf"),
+        blocks=[
+            Block(
+                id="p",
+                kind=BlockKind.PARAGRAPH,
+                text="As described above\n2.1.4. is where the gas signals are discussed.",
+                order=0,
+            )
+        ],
+    )
+    assert len(split_stacked_headings(doc).blocks) == 1

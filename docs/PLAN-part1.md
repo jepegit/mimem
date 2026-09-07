@@ -778,12 +778,15 @@ minutes advanced warning" spoken as though it were a sentence. Merging now looks
 furniture and textless figures, and not past captions or headings. Rejoins on that paper went
 9 → 32, and lower-case openings 31 → 8.
 
-**Known, not fixed: two headings can merge into one section title.** On a 98-page review, stage
-2's paragraph rejoining merged a heading with the one following it in 2 of 26 sections, giving
-"2.3. Core ML Models and Training Strategies 2.3.1. Model Architectures and General Workflow".
-The output is speakable and breaks no rule, so it is a quality defect rather than a failure; the
-fix is in the column- and page-break heuristics, where a change risks every document that
-currently works. Worth doing deliberately, with the corpus grown first.
+**Fixed: two headings could arrive as one section title.** Diagnosed wrongly the first time —
+this was blamed on paragraph rejoining, and rejoining never touches a heading. A section heading
+set directly above its first subsection has no paragraph between them, so the extractor returns
+both as one block; the lines are collapsed later and the section is called "2.3. Core ML Models
+and Training Strategies 2.3.1. Model Architectures and General Workflow". Splitting happens early
+in stage 2, while the extractor's line breaks are still there — once they are spaces there is
+nothing left to split on. Only a *multi-level* number starts a new heading, because "1.
+Introduction" on its own line is far more likely to be a list item, and splitting a list into
+headings would invent sections. Three on that paper, and none left.
 
 **M7 — TTS handoff (0.5 week).** Chunked output with stable IDs, an ElevenLabs-shaped adapter and a
 local-engine adapter (Piper/Kokoro) for cheap iteration, break-marker rendering. *Done when:* one

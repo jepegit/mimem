@@ -67,8 +67,9 @@ uv run mimem build paper.pdf --out out/paper
 ```
 
 That is the whole pipeline: read the PDF, work out what is worth saying, decide how to say it,
-lay it out as a programme, write four files, and check the result against ninety design rules. It
-exits non-zero if it broke one, so a bad script cannot be produced quietly.
+lay it out as a programme, write four files, and check the result against the thirty design rules
+that can be checked mechanically — of ninety-one the programme is built to. It exits non-zero if it
+broke one, so a bad script cannot be produced quietly.
 
 <table>
 <tr><td><code>audio.md</code></td><td>What the speech engine says, and nothing else. No digits, no brackets, no citations.</td></tr>

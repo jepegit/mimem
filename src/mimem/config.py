@@ -104,6 +104,30 @@ class ElaborationBudget(BaseModel):
     max_anchors: int = 4
     anchor_min_abstractness: float = 0.50
 
+    #: Which implementation answers each task: ``off``, ``assist`` or ``prefer``. See
+    #: :mod:`mimem.elaborate.reconcile`.
+    #:
+    #: Everything defaults to ``prefer``, including ``gloss``, and that last part was a
+    #: deliberate reversal. ``gloss`` looked like the obvious ``assist`` candidate: it is the
+    #: one task with two real implementations, and the deterministic one takes definitions from
+    #: the paper's own sentences with near-perfect precision. But the two implementations do not
+    #: produce the *same thing*. The rules write ``short_def``, the pre-load's one line; the
+    #: model writes ``short_def`` **and** ``long_def``, the first full introduction, and a
+    #: spoken form. Skipping the call because a short definition exists would quietly stop a
+    #: paid run producing the long one -- less for the same money, silently.
+    #:
+    #: So ``assist`` is offered rather than assumed. Set ``gloss: assist`` to spend nothing on
+    #: terms the paper defines for itself, knowing what that costs you. Set a task to ``off`` to
+    #: keep a paid run away from it entirely.
+    modes: dict[str, str] = Field(
+        default_factory=lambda: dict.fromkeys(
+            ("gloss", "anchor", "analogy", "why", "figure", "compress"), "prefer"
+        )
+    )
+
+    def mode_for(self, task: str) -> str:
+        return self.modes.get(task, "prefer")
+
 
 class Profile(BaseModel):
     """A named set of budgets. Loaded from ``profiles/<name>.yaml``."""

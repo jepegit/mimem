@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from mimem.ir import Beat, BeatType, BlockKind, Document, Script, text_sha256
 
@@ -69,17 +70,26 @@ class Artefacts:
         return written
 
 
-def render(script: Script, doc: Document | None = None) -> Artefacts:
+def render(
+    script: Script,
+    doc: Document | None = None,
+    elaboration: object | None = None,
+) -> Artefacts:
     """Render every artefact from one script.
 
     ``doc`` is optional and only ``study.md`` uses it, for the one thing the written track owes
     the reader that the script does not contain: the equations nobody narrated (rule MTH-04).
+
+    ``elaboration`` is stage 6's report. It was not a parameter at all until the first live run,
+    and :mod:`mimem.elaborate` had been promising in its own docstring that "the manifest always
+    says what happened" for five milestones. It did not. The report was computed and dropped,
+    and nothing noticed because with no model configured there is nothing in it to miss.
     """
     return Artefacts(
         audio=render_audio(script),
         study=render_study(script, doc),
         cards=render_cards(script),
-        manifest=render_manifest(script, doc),
+        manifest=render_manifest(script, doc, elaboration),
     )
 
 
@@ -281,8 +291,12 @@ def render_cards(script: Script) -> str:
 # -- manifest ------------------------------------------------------------------------------
 
 
-def render_manifest(script: Script, doc: Document | None = None) -> str:
-    """The audit trail: scores, exposures, spacing, drops, and one chunk per beat."""
+def render_manifest(
+    script: Script,
+    doc: Document | None = None,
+    elaboration: object | None = None,
+) -> str:
+    """The audit trail: scores, exposures, spacing, drops, one chunk per beat, and stage 6."""
     chunks = [
         {
             "id": beat.id,
@@ -340,4 +354,48 @@ def render_manifest(script: Script, doc: Document | None = None) -> str:
         "notes": script.notes,
         "chunks": chunks,
     }
+    if elaboration is not None:
+        payload["elaboration"] = _elaboration_manifest(elaboration)
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+
+def _elaboration_manifest(report: object) -> dict[str, Any]:
+    """What stage 6 asked for, what it got, and what it cost.
+
+    Typed loosely on purpose: :mod:`mimem.render` is stage 8 and importing stage 6 to name a
+    dataclass would tie the renderer to the layer it is meant to be independent of. The fields
+    read here are the ones :class:`~mimem.elaborate.ElaborationReport` documents.
+
+    The degradation entries carry their ``kind`` -- not configured, unreachable, refused,
+    rejected, over budget -- because that is the whole point of M9 having four of them, and it
+    was unreachable from the artefacts until now.
+    """
+    ledger = getattr(report, "ledger", None)
+    degraded = getattr(report, "degraded", []) or []
+    rejected = getattr(report, "rejected", []) or []
+    return {
+        "no_provider": bool(getattr(report, "no_provider", False)),
+        "attempted": dict(getattr(report, "attempted", {}) or {}),
+        "succeeded": dict(getattr(report, "succeeded", {}) or {}),
+        "deterministic": dict(getattr(report, "deterministic", {}) or {}),
+        "degraded": [
+            {
+                "task": d.task,
+                "concept": d.concept,
+                "kind": getattr(d.kind, "value", str(d.kind)),
+                "reason": d.reason,
+                "fallback": d.fallback,
+            }
+            for d in degraded
+        ],
+        "absences": {
+            getattr(k, "value", str(k)): v
+            for k, v in (getattr(report, "absences", dict)() or {}).items()
+        },
+        "rejected": [{"kind": f.kind, "value": f.value, "message": f.message} for f in rejected],
+        "cost": {
+            "dollars": round(getattr(ledger, "spent", 0.0), 6),
+            "calls": getattr(ledger, "calls", 0),
+            "cached_reads": getattr(ledger, "cached_reads", 0),
+        },
+    }

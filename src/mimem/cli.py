@@ -557,6 +557,9 @@ def build(
     provider: Annotated[
         str, typer.Option("--provider", help=f"with --llm: {', '.join(PROVIDERS)}")
     ] = "anthropic",
+    model: Annotated[
+        str | None, typer.Option("--model", help="with --llm: which model to call")
+    ] = None,
     base_url: Annotated[
         str | None, typer.Option("--base-url", help="for --provider openai/local")
     ] = None,
@@ -581,7 +584,7 @@ def build(
     # The nine stages live in `mimem.pipeline`, shared with the assistant server: two copies of
     # that sequence would drift the first time a stage moved.
     client = (
-        _make_client(fixtures, live, None, settings, False, provider, base_url)
+        _make_client(fixtures, live, model, settings, False, provider, base_url)
         if (fixtures is not None or live)
         else None
     )

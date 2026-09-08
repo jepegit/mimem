@@ -142,8 +142,25 @@ def _attribute(match: re.Match[str]) -> str:
 #: * the letter in front must be **lower case**, because a designation ends in a capital --
 #:   "NMC811" and "LiFePO4" survive, "conditions4" does not;
 #: * the word in front is checked against the unit lexicon, so the exponent in "cm2" survives.
-_SUPERSCRIPT_AFTER_WORD = re.compile(r"(?<=[a-z])(\d{1,3}(?:[,–-]\d{1,3})*)(?=[\s.,;:)]|$)")
-_SUPERSCRIPT_AFTER_STOP = re.compile(r"(?<=[.!?])(\d{1,3}(?:[,–-]\d{1,3})*)(?=\s+[A-Z(]|$)")
+#: A run of citation numbers. The separator may be a comma, a dash, **or a space**: superscript
+#: digits carry no punctuation of their own, so whether the comma survives extraction is a
+#: property of the PDF and not of the citation. Across twelve papers "materials.4 8",
+#: "graphite.9 11" and "materials.19,21 23" all appeared, and only the third was being stripped
+#: -- the other two left a bare digit in the audio track, which is 68 of 154 ``NUM-02`` failures.
+_RUN = r"\d{1,3}(?:\s*[,–-]\s*\d{1,3}|\s+\d{1,3})*"
+
+_SUPERSCRIPT_AFTER_WORD = re.compile(rf"(?<=[a-z])({_RUN})(?=[\s.,;:)]|$)")
+
+#: The letter in the lookbehind is what keeps a decimal safe. ``(?<=[.!?])`` alone matches the
+#: "5 3" in "0.5 3 times", because the point of a decimal is also a full stop to a regex; a
+#: sentence-ending period has a letter in front of it and a decimal point has a digit.
+#:
+#: **Any** letter, not a lower-case one. Requiring lower case was the first attempt and it
+#: silently stopped stripping after an acronym -- "a stable SEI.26,27 Significant" kept its
+#: citation, which is a sentence ending in exactly the way a chemistry paper's sentences do.
+#: It cost seventeen new failures on one paper and thirteen on another before the corpus run
+#: showed it.
+_SUPERSCRIPT_AFTER_STOP = re.compile(rf"(?<=[A-Za-z][.!?])({_RUN})(?=\s+[A-Z(]|$)")
 
 #: Below this many markers, the pattern is more likely to be data than a citation style.
 MIN_SUPERSCRIPT_EVIDENCE = 10

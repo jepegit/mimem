@@ -28,10 +28,32 @@ MIN_FRACTION = 0.30
 _DIGITS = re.compile(r"\d+")
 _WS = re.compile(r"\s+")
 
+#: A page label: one character, alone. ACS articles awaiting an issue number are paginated
+#: A, B, C..., and the footer carries that letter beside the citation line -- so every page had a
+#: different signature, none of them repeated, and a seven-page paper narrated its footer seven
+#: times. Because the footer sits between two halves of a column, it did so *inside* a sentence:
+#: "the yolk-shell structure is much higher dx.doi.org Nano Lett."
+#:
+#: Matched both as its own line and at either end of one, because :func:`dehyphenate` runs first
+#: and may already have joined the label onto the line below it.
+_PAGE_LABEL_LINE = re.compile(r"^\s*[A-Za-z0-9]\s*$")
+_EDGE_LABEL = re.compile(r"^[A-Za-z0-9](?=\s)\s*|\s+[A-Za-z0-9]$")
+
+#: A repeated signature has to be at least this long before another block is called furniture
+#: for containing it. Short enough to be a coincidence is short enough to be prose.
+MIN_CONTAINED = 24
+
 
 def _signature(text: str) -> str:
-    """Normalise away the parts that change from page to page (the page number, mostly)."""
-    return _WS.sub(" ", _DIGITS.sub("#", text.strip().lower()))[:120]
+    """Normalise away the parts that change from page to page (the page number, mostly).
+
+    Whitespace goes entirely rather than being collapsed, because the same footer is extracted
+    as "| Nano Lett." on one page and "|Nano Lett." on the next, and a signature that cannot
+    survive that is not a signature.
+    """
+    lines = [line for line in text.strip().splitlines() if not _PAGE_LABEL_LINE.match(line)]
+    joined = _EDGE_LABEL.sub("", " ".join(lines).strip())
+    return _WS.sub("", _DIGITS.sub("#", joined.lower()))[:120]
 
 
 def strip_page_artifacts(doc: Document) -> Document:
@@ -67,16 +89,31 @@ def strip_page_artifacts(doc: Document) -> Document:
 
     threshold = max(MIN_REPEATS, math.ceil(MIN_FRACTION * len(pages)))
     marked = 0
-    for sig, seen_pages in candidates.items():
-        if len(seen_pages) < threshold:
-            continue
+    repeated = {sig for sig, seen in candidates.items() if len(seen) >= threshold}
+
+    def mark(block_id: str, reason: str) -> bool:
+        block = doc.block(block_id)
+        if block.kind is BlockKind.PAGE_ARTIFACT:
+            return False
+        block.kind = BlockKind.PAGE_ARTIFACT
+        block.attrs["artifact_reason"] = reason
+        return True
+
+    for sig in repeated:
         for block_id in edge_blocks[sig]:
-            block = doc.block(block_id)
-            if block.kind is BlockKind.PAGE_ARTIFACT:
-                continue
-            block.kind = BlockKind.PAGE_ARTIFACT
-            block.attrs["artifact_reason"] = f"repeats on {len(seen_pages)} pages"
-            marked += 1
+            marked += mark(block_id, f"repeats on {len(candidates[sig])} pages")
+
+    # The first page's footer is the running footer with something else stuck to it -- the
+    # copyright line, or the received-and-revised dates. It is the same furniture and it is read
+    # out in the same place, but it appears once, so repetition alone never reaches it.
+    long_enough = [sig for sig in repeated if len(sig) >= MIN_CONTAINED]
+    for sig, block_ids in edge_blocks.items():
+        if sig in repeated:
+            continue
+        if not any(other in sig for other in long_enough):
+            continue
+        for block_id in block_ids:
+            marked += mark(block_id, "contains a footer that repeats on other pages")
 
     if marked:
         doc.note(

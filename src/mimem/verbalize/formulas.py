@@ -47,7 +47,11 @@ ELEMENTS: dict[str, str] = {
 
 #: One element and its optional subscript, which may be fractional in a non-stoichiometric
 #: compound -- which is exactly the case that broke, since ``Li3.3`` has a decimal point in it.
-_GROUP = re.compile(r"([A-Z][a-z]?)(\d+(?:\.\d+)?)?")
+#: The subscript may be written without its leading zero. Typesetters drop it constantly --
+#: ``LiNi.5Co.2Mn.3O2`` is the NMC-532 cathode, and it is the *title* of one corpus paper, so
+#: it recurs in the orientation and in every callback. Requiring a digit first left 71 raw
+#: decimals in one programme.
+_GROUP = re.compile(r"([A-Z][a-z]?)(\d+(?:\.\d+)?|\.\d+)?")
 
 #: A candidate formula: a run of capital-led groups, each with an *optional* subscript.
 #:
@@ -102,7 +106,9 @@ def spoken_formula(token: str) -> str | None:
     for symbol, subscript in groups:
         parts.append(ELEMENTS[symbol])
         if subscript:
-            parts.append(subscript)
+            # Put the leading zero back before handing it on: the number verbalizer says
+            # "zero point five" for "0.5" and nothing at all for ".5".
+            parts.append(f"0{subscript}" if subscript.startswith(".") else subscript)
     return " ".join(parts)
 
 

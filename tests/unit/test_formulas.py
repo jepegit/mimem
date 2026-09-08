@@ -69,3 +69,26 @@ def test_the_formula_reaches_the_audio_without_raw_digits() -> None:
 def test_the_subscripts_go_through_the_profile_not_a_second_rulebook() -> None:
     """Left as digits here on purpose, so the profile's numeric fidelity applies to them."""
     assert "3.3" in (spoken_formula("Li3.3SnS3.3Cl0.7") or "")
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        ("LiNi.5Co.2Mn.3O2", "lithium nickel 0.5 cobalt 0.2 manganese 0.3 oxygen 2"),
+        ("LiNi.8Co.1Mn.1O2", "lithium nickel 0.8 cobalt 0.1 manganese 0.1 oxygen 2"),
+    ],
+)
+def test_a_subscript_can_lose_its_leading_zero(formula: str, expected: str) -> None:
+    """Typesetters drop it constantly, and one corpus paper has it in its own title.
+
+    `LiNi.5Co.2Mn.3O2` is the NMC-532 cathode. Because it is the title, it recurs in the
+    orientation and in every callback -- 71 raw decimals in one programme from one string.
+    The zero is put back before the number pass, which says nothing at all for a bare ".5".
+    """
+    assert spoken_formula(formula) == expected
+
+
+def test_the_restored_zero_is_spoken() -> None:
+    spoken = verbalize_text("a LiNi.5Co.2Mn.3O2 cell", load_profile("study"), Listener())
+    assert "zero point five" in spoken
+    assert not any(character.isdigit() for character in spoken)

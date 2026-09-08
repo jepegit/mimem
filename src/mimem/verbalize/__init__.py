@@ -22,6 +22,7 @@ from mimem.verbalize.citations import (
     strip_identifiers,
     verbalize_citations,
 )
+from mimem.verbalize.formulas import spoken_formula, verbalize_formulas
 from mimem.verbalize.numbers import (
     digits_to_words,
     int_to_words,
@@ -47,10 +48,12 @@ __all__ = [
     "normalize",
     "number_to_words",
     "ordinal_to_words",
+    "spoken_formula",
     "spoken_unit",
     "strip_identifiers",
     "verbalize_block",
     "verbalize_citations",
+    "verbalize_formulas",
     "verbalize_indices",
     "verbalize_numbers",
     "verbalize_parentheticals",
@@ -95,6 +98,11 @@ def verbalize_text(
     )
     text = verbalize_parentheticals(text)
     text = verbalize_indices(text)
+    # Before the numbers, and this order is the whole point: the number verbalizer deliberately
+    # walks past digits that follow letters -- that is what stops "NMC811" being read as a
+    # quantity -- so once it has gone by, nothing can tell that the 3.3 in "Li3.3SnS3.3Cl0.7"
+    # was ever part of a compound. Rule NUM-02 failed a real build three times on one string.
+    text = verbalize_formulas(text)
     text = verbalize_numbers(
         text,
         fidelity=profile.numeric_fidelity,

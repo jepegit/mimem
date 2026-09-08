@@ -25,7 +25,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from mimem.ir import Block, BlockKind, BlockRole, Document, Span
+from mimem.ir import Block, BlockKind, BlockRole, Document, Span, TriageAction
 from mimem.ir.concepts import Concept, ConceptKind
 from mimem.verbalize.symbols import GREEK
 
@@ -195,7 +195,37 @@ NON_CONCEPTS = frozenset(
         "creative commons",
         "all rights",
         "corresponding author",
+        # Figure credits. These sit in captions, which triage keeps -- correctly, a caption is
+        # content -- so the filter above does not reach them. On one review "Adapted with
+        # permission" and "permission from Ref" were both ranked above half its real subjects.
+        "adapted with permission",
+        "permission from ref",
+        "reproduced with permission",
+        "reprinted with permission",
+        "copyright",
+        "all rights reserved",
+        "available online",
+        "published by elsevier",
+        "under a creative commons",
     }
+)
+
+#: A finite verb makes a phrase a clause rather than a term. The sliding window that finds
+#: repeated phrases has no grammar, so "study are open-sourced" scored as high as the paper's
+#: real subjects -- it repeats, and repetition is all the window can see.
+CLAUSE_LIKE = re.compile(
+    r"\b(?:is|are|was|were|be|been|being|has|have|had|do|does|did|will|would|can|could|"
+    r"should|may|might|must)\b",
+    re.IGNORECASE,
+)
+
+#: Phrases that are a journal, publisher or section-of-a-journal name rather than an idea. A
+#: running header repeats on every page, which is exactly what the repeated-phrase extractor is
+#: looking for, so these score highly by construction.
+PUBLICATION_NOISE = re.compile(
+    r"\b(?:current\s+opinion|opinion\s+in|journal\s+of|proceedings\s+of|annual\s+review|"
+    r"chemical\s+engineering|elsevier|springer|wiley|royal\s+society)\b",
+    re.IGNORECASE,
 )
 
 #: Verbs and participles that a sliding window drags in behind a real term. "battery
@@ -303,10 +333,24 @@ def _is_phrase_like(words: list[str]) -> bool:
 
 
 def _content_blocks(doc: Document) -> list[Block]:
+    """Blocks a concept may be extracted from: what the programme will actually narrate.
+
+    The triage check is the one that was missing, and it let the journal's own name become one
+    of a paper's top concepts. "Current Opinion in Chemical Engineering" appeared in sixteen
+    blocks of one review -- twelve of them running headers, reference entries and the author
+    line, every one already marked *drop*. Filtering on kind and role alone does not see that:
+    a page header the extractor is handed is a page header whatever triage decided about it.
+
+    If a block is not going to be said, it should not be teaching anybody a term. Blocks with no
+    triage decision are kept, so calling this on an untriaged document still works.
+    """
     return [
         b
         for b in doc.blocks
-        if b.kind not in _SKIP_KINDS and b.role not in _SKIP_ROLES and b.text.strip()
+        if b.kind not in _SKIP_KINDS
+        and b.role not in _SKIP_ROLES
+        and b.text.strip()
+        and (b.triage is None or b.triage.action is not TriageAction.DROP)
     ]
 
 
@@ -325,6 +369,11 @@ def extract(doc: Document) -> list[Candidate]:
     ) -> None:
         canonical = _normalise(canonical)
         if not canonical or len(canonical) < 3:
+            return
+        # Checked here rather than in one extraction pass, because there are five of them and
+        # "study are open-sourced" arrived through a different one than the filter guarding
+        # against it. `record` is the only funnel they all go through.
+        if CLAUSE_LIKE.search(canonical) or PUBLICATION_NOISE.search(canonical):
             return
         key = canonical.lower()
         existing = candidates.get(key)

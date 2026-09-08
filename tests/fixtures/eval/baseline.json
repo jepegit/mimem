@@ -3,7 +3,7 @@
     {
       "document": "synthetic-paper.pdf",
       "lint_errors": 0,
-      "lint_warnings": 8,
+      "lint_warnings": 4,
       "rules_checked": 32,
       "rules_skipped": 0,
       "minutes": 7.65,
@@ -26,25 +26,25 @@
     {
       "document": "synthetic-sensor-paper.md",
       "lint_errors": 0,
-      "lint_warnings": 39,
+      "lint_warnings": 22,
       "rules_checked": 32,
       "rules_skipped": 0,
-      "minutes": 19.25,
-      "budget_minutes": 19.29,
-      "budget_used": 0.998,
+      "minutes": 18.16,
+      "budget_minutes": 18.28,
+      "budget_used": 0.994,
       "sections": 6,
       "segments": 12,
-      "beats": 91,
-      "cards": 10,
+      "beats": 88,
+      "cards": 9,
       "gloss_coverage": 0.182,
-      "concepts_spaced": 0.545,
+      "concepts_spaced": 0.455,
       "intervals_expanding": 1.0,
-      "recurring_concepts": 1,
-      "median_gap_minutes": 7.84,
+      "recurring_concepts": 0,
+      "median_gap_minutes": 9.18,
       "grounded": 1.0,
       "values_kept": 1.0,
       "words_retained": 0.89,
-      "prompts_per_minute": 0.831
+      "prompts_per_minute": 0.826
     }
   ]
 }

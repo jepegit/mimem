@@ -64,11 +64,6 @@ lint)*
 no "see Figure 3", no "as shown in the table below", no "in the previous chapter" unless that
 chapter is in the same audio programme. *(lint: forward/dangling-reference check)*
 
-**STR-09** A **recap or transition carries content**, not only a label. "That was methods." and
-"More on drift coefficient." satisfy `STR-06` and `SIG-01` and say nothing. *(lint, warning)*
-
-*Also from a critic pass. A rule that can be satisfied by a label is a rule that will be.*
-
 ---
 
 ## 2. Segmentation and pacing (`SEG-*`, `DUR-*`, `PAU-*`)
@@ -83,6 +78,18 @@ lint)*
 **SEG-03** At most **3 new terms** per segment; at most **1 high-element-interactivity item**
 (a multi-part definition, a derivation, a mechanism with more than three interacting parts).
 *(KB §2.2; lint against the concept registry)*
+
+**SEG-04** A **transition announces what actually comes next**. A boundary that names a concept
+the following beats are not about is worse than a boundary that names nothing. *(lint, warning)*
+
+*This replaced a rule of its own author's. The critic pass produced "a recap or transition
+carries content, not only a label", on the evidence of "That was methods." and "More on drift
+coefficient." Both halves were wrong. The short recap is the honest floor for a template that
+cannot paraphrase, and naming what a section merely mentioned had already been tried and
+reverted for producing eight duplicate recaps. The transitions were broken, but because they
+were* untrue *-- four of six announced one concept and were followed by a question about
+another. Announcing nothing is allowed: "Still on the methods." is a smaller claim and always
+accurate.*
 
 **DUR-01** All durations are estimated from word counts at a configurable rate, default
 **155 wpm** for technical narration, plus explicit pause durations. *(config)*

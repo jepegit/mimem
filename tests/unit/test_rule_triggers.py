@@ -403,10 +403,27 @@ SCRIPT_TRIGGERS: dict[str, Callable[[], Script]] = {
             ),
         ],
     ),
-    # A recap that names its section and says nothing else.
-    "STR-09": lambda: _script(
-        segments=[[_beat("r1", BeatType.RECAP, "That was methods.", generated=True, spans=[])]],
-        title="Methods",
+    # A transition that announces one concept, followed by beats about another. Real: four of
+    # six transitions in one programme did this, because the planner chose from every concept
+    # anywhere in the next segment rather than from its opening.
+    "SEG-04": lambda: _script(
+        segments=[
+            [
+                _beat(
+                    "t1",
+                    BeatType.TRANSITION,
+                    "More on the measurement resonator.",
+                    concept_ids=["c1"],
+                    generated=True,
+                    spans=[],
+                ),
+                _beat("e1", concept_ids=["c2"], text="Something else entirely."),
+            ]
+        ],
+        registry={
+            "c1": _concept("c1", "measurement resonator"),
+            "c2": _concept("c2", "clamping stress"),
+        },
     ),
 }
 

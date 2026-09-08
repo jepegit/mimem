@@ -789,3 +789,15 @@ def _count(n: int) -> str:
     when the template already knows it is speech."""
     words = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
     return words[n] if 0 <= n < len(words) else str(n)
+
+
+def section_fallback_transition(factory: BeatFactory, section_title: str) -> str:
+    """The smallest true thing a boundary can say: that the section continues.
+
+    Shared with ``transition_beat`` so that a withdrawn announcement (rule SEG-04) and a
+    boundary that never had one read identically -- a listener should not be able to hear which
+    happened.
+    """
+    return verbalize_text(
+        f"Still on {_spoken_title(section_title)}.", factory.profile, factory.listener
+    ).strip()

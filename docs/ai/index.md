@@ -72,9 +72,54 @@ paper's direction is rejected before it reaches the programme (`GRD-03`). You ca
 happen — the elaboration report lists what was accepted, what was rejected and why.
 
 **When the model is absent, every task degrades along a documented path** and the manifest
-records it. A gloss falls back to the paper's own definitional sentence; an anchor is omitted
+records *why* — there are four different reasons and they need four different actions from you:
+no provider configured, configured but unreachable, reached but refused the shape, or out of
+budget. A run with no provider at all says so once rather than once per task. A gloss falls back to the paper's own definitional sentence; an anchor is omitted
 rather than invented; a figure falls back to its caption. That is why `--local` is the default
 and why a forgotten flag cannot start billing you.
+
+## Was it worth it?
+
+```bash
+uv run mimem compare paper.pdf --fixtures fixtures/paper
+```
+
+Builds the document twice — once deterministic, once with the model — and diffs the result. The
+deterministic build is the control; the difference is what you paid for.
+
+```
+gloss_coverage      0.182 -> 0.273  (+0.091 better)
+concepts_spaced     0.545 -> 0.364  (-0.181)
+cards               10 -> 7         (-3)
+prompts_per_minute  0.831 -> 0.697  (-0.134)
+the model wrote: 1 analogy, 1 anchor, 1 gloss, 1 why
+cost: $0.0000 over 0 calls
+```
+
+**That shape is worth understanding before you spend anything.** More terms get defined — and
+the explaining costs duration, which comes out of the same budget as the questions. Fewer cards,
+fewer prompts per minute, ideas coming back less often. Retrieval practice is the second-largest
+effect in [the knowledge base](../knowledge-base/01-core-effects.md), so a build that explains
+more and asks less is not automatically a better one.
+
+Whether that trade is right depends on the document and on you. The point of the command is that
+it is now a number you can look at rather than an impression.
+
+## Which implementation answers each task
+
+Each task can be set to one of three modes in the profile:
+
+| Mode | What happens | For |
+|---|---|---|
+| `off` | the deterministic path only; the model is never called | a task whose rules you trust |
+| `assist` | the rules answer first; the model is asked only about what is left | paying for recall, not precision |
+| `prefer` | the model answers, and the rules catch what it does not | the default |
+
+Everything defaults to `prefer`. `gloss` looked like the obvious `assist` candidate — it is the
+one task with two real implementations — and that was tried and reverted, because the two do not
+produce the same thing: the rules write the pre-load's one line, the model writes that *and* the
+full introduction. Skipping the call because a short definition already existed would have given
+a paid run less for the same money, silently. It is offered, not assumed.
 
 ## Cost, briefly
 

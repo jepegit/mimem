@@ -44,7 +44,16 @@ EFFORT_HIGH = "high"
 
 
 class LLMUnavailableError(RuntimeError):
-    """No model is configured, or the one configured refused."""
+    """A model was configured but could not be reached."""
+
+
+class NoProviderError(LLMUnavailableError):
+    """No model is configured at all.
+
+    A subclass rather than a message, because "you have no key" and "the server did not answer"
+    need different sentences and different actions from the user, and the manifest should be
+    able to tell them apart without matching on prose. See :class:`mimem.elaborate.Absence`.
+    """
 
 
 class LLMRefusedError(RuntimeError):
@@ -155,7 +164,7 @@ class NullClient(BaseClient):
     """
 
     def complete(self, request: Request) -> Response:
-        raise LLMUnavailableError(
+        raise NoProviderError(
             f"no model configured for task {request.task!r}; running deterministic-only"
         )
 

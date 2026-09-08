@@ -30,6 +30,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from mimem.config import Listener, Profile
+from mimem.elaborate.reconcile import Absence, Deterministic, Mode, classify
 from mimem.ir import (
     Analogy,
     Anchor,
@@ -56,6 +57,9 @@ from mimem.verify.grounding import Finding
 #: need to: the task carries the sentences that matter, and the document is context.
 MAX_DOCUMENT_CHARS = 60_000
 
+#: Every task that can be reconciled, so a mode exists for each.
+TASKS = ("gloss", "anchor", "analogy", "why", "figure", "compress")
+
 
 @dataclass(frozen=True)
 class Degradation:
@@ -65,9 +69,12 @@ class Degradation:
     concept: str
     reason: str
     fallback: str
+    #: *Why* there is no model answer. Four different situations were one string until M9, and
+    #: they need four different actions from the user -- see :class:`Absence`.
+    kind: Absence = Absence.UNREACHABLE
 
     def __str__(self) -> str:
-        return f"{self.task} for {self.concept!r}: {self.reason} -> {self.fallback}"
+        return f"{self.task} for {self.concept!r}: [{self.kind.value}] {self.reason} -> {self.fallback}"
 
 
 @dataclass
@@ -76,24 +83,51 @@ class ElaborationReport:
 
     attempted: dict[str, int] = field(default_factory=dict)
     succeeded: dict[str, int] = field(default_factory=dict)
+    #: Tasks answered by the deterministic implementation. Counted separately from ``succeeded``
+    #: so that "what did the model actually add" is a number rather than an impression.
+    deterministic: dict[str, int] = field(default_factory=dict)
     degraded: list[Degradation] = field(default_factory=list)
     rejected: list[Finding] = field(default_factory=list)
     ledger: Ledger = field(default_factory=Ledger)
     cache: CacheStats | None = None
+    #: True when no provider was configured, so nothing was attempted rather than failing
+    #: once per task. Reported once, which is the useful number of times.
+    no_provider: bool = False
 
     def _count(self, bucket: dict[str, int], task: str) -> None:
         bucket[task] = bucket.get(task, 0) + 1
 
     def summary(self) -> str:
+        if self.no_provider:
+            got = sum(self.deterministic.values())
+            return (
+                f"no model configured; {got} written from the source's own sentences "
+                "(`mimem doctor` says what this machine can reach)"
+            )
         if not self.attempted:
             return "no elaboration attempted"
         done = ", ".join(f"{n} {task}" for task, n in sorted(self.succeeded.items())) or "nothing"
         out = f"wrote {done}"
+        if self.deterministic:
+            total = sum(self.deterministic.values())
+            out += f"; {total} from the source's own sentences"
         if self.degraded:
             out += f"; {len(self.degraded)} degraded"
         if self.rejected:
             out += f"; {len(self.rejected)} rejected by the grounding check"
         return out
+
+    def absences(self) -> dict[Absence, int]:
+        """How many tasks each kind of absence accounts for.
+
+        The distinction the manifest could not previously make. "Everything degraded" means
+        something very different when it is one missing key than when it is forty rejected
+        claims, and only one of those is a problem with the setup.
+        """
+        counts: dict[Absence, int] = {}
+        for entry in self.degraded:
+            counts[entry.kind] = counts.get(entry.kind, 0) + 1
+        return counts
 
 
 def _document_text(doc: Document) -> str:
@@ -194,6 +228,15 @@ def elaborate(
     """
     client = client or NullClient()
     report = ElaborationReport(ledger=Ledger(cap=budget))
+
+    # With no provider at all, every task is `off` rather than "attempt, fail, fall back". The
+    # old behaviour produced one degradation per task saying the same thing forty times, which
+    # is how "you have no API key" came to look like forty separate problems. One line says it.
+    if isinstance(client, NullClient):
+        report.no_provider = True
+        modes = dict.fromkeys(TASKS, Mode.OFF)
+    else:
+        modes = {task: Mode(profile.elaboration.mode_for(task)) for task in TASKS}
     document = _document_text(doc)
     pool = gather(doc, dict(registry.concepts), profile, listener)
     candidates = _candidates(registry, profile)
@@ -215,7 +258,8 @@ def elaborate(
                 partial(_apply_gloss, concept),
                 source=source,
                 fallback="the source's own definitional sentence",
-                on_degrade=partial(_fallback_gloss, concept, pool),
+                mode=modes["gloss"],
+                on_degrade=partial(_definition_from_the_source, concept, pool),
             )
         if concept.id in anchors and concept.anchor is None:
             _run(
@@ -227,6 +271,7 @@ def elaborate(
                 source=source,
                 kinds=GROUNDING_KINDS["anchor"],
                 fallback="no anchor",
+                mode=modes["anchor"],
             )
         if concept.why is None:
             _run(
@@ -237,6 +282,7 @@ def elaborate(
                 partial(_apply_why, concept, spans),
                 source=source,
                 fallback="no why-explanation",
+                mode=modes["why"],
             )
 
     for concept in candidates[: profile.elaboration.max_analogies]:
@@ -252,6 +298,7 @@ def elaborate(
             source="\n".join(support),
             kinds=GROUNDING_KINDS["analogy"],
             fallback="no analogy",
+            mode=modes["analogy"],
         )
 
     _describe_figures(report, client, doc, document, out_dir)
@@ -324,9 +371,30 @@ def _run(
     source: str,
     fallback: str,
     kinds: tuple[str, ...] = ("number", "year", "name", "direction"),
-    on_degrade: Callable[[], None] | None = None,
+    on_degrade: Deterministic | None = None,
+    mode: Mode = Mode.PREFER,
 ) -> None:
-    """One task, with its budget check, its grounding check and its degradation path."""
+    """One task: its two implementations, its budget, its grounding check, and who wins.
+
+    ``on_degrade`` is the deterministic implementation. It was named for when it ran -- after a
+    failure -- and under ``assist`` it runs *first*, which is the whole point of the mode: the
+    rules answer what they are good at, and the model is asked only about the rest. It returns
+    whether it produced anything, because nothing else can tell the caller that.
+    """
+    deterministic = on_degrade
+
+    if mode is Mode.OFF:
+        if deterministic is not None and deterministic():
+            report._count(report.deterministic, request.task)
+        return
+
+    if mode is Mode.ASSIST and deterministic is not None and deterministic():
+        # The rules answered. Calling the model now would cost a request to produce something
+        # that would be discarded, which is a real cost for no gain -- `mimem compare` is the
+        # place that measures the two against each other.
+        report._count(report.deterministic, request.task)
+        return
+
     report._count(report.attempted, request.task)
     try:
         report.ledger.check(estimate(request))
@@ -334,29 +402,40 @@ def _run(
     except BudgetExceededError:
         raise
     except (LLMUnavailableError, LLMRefusedError) as exc:
-        report.degraded.append(Degradation(request.task, concept.canonical, str(exc), fallback))
-        if on_degrade is not None:
-            on_degrade()
+        _degrade(report, request.task, concept.canonical, str(exc), fallback, classify(exc))
+        if deterministic is not None and deterministic():
+            report._count(report.deterministic, request.task)
         return
 
     report.ledger.record(response)
     findings = ground(response.data, source, kinds=kinds)
     if findings:
         report.rejected.extend(findings)
-        report.degraded.append(
-            Degradation(
-                request.task,
-                concept.canonical,
-                "; ".join(str(f) for f in findings[:3]),
-                fallback,
-            )
+        _degrade(
+            report,
+            request.task,
+            concept.canonical,
+            "; ".join(str(f) for f in findings[:3]),
+            fallback,
+            Absence.REJECTED,
         )
-        if on_degrade is not None:
-            on_degrade()
+        if deterministic is not None and deterministic():
+            report._count(report.deterministic, request.task)
         return
 
     apply(response.data)
     report._count(report.succeeded, request.task)
+
+
+def _degrade(
+    report: ElaborationReport,
+    task: str,
+    concept: str,
+    reason: str,
+    fallback: str,
+    kind: Absence,
+) -> None:
+    report.degraded.append(Degradation(task, concept, reason, fallback, kind))
 
 
 #: Which checks each task's output faces (rule GRD-03). A gloss or a why-explanation is a claim
@@ -486,10 +565,18 @@ def _apply_why(concept: Concept, spans: list[Span], out: WhyOut) -> None:
     concept.why = Elaboration(text=out.text, spans=spans, generated_by="llm", verified=True)
 
 
-def _fallback_gloss(concept: Concept, pool: SupportPool) -> None:
-    """Rule PRE-01 still needs a line for the pre-load: use the paper's own definition."""
+def _definition_from_the_source(concept: Concept, pool: SupportPool) -> bool:
+    """The paper's own definitional sentence, for rule PRE-01's pre-load line.
+
+    Returns whether the concept ends up with a definition, which is what ``assist`` needs to
+    decide whether the model has anything left to do. It is ``True`` when the concept already
+    had one -- from :mod:`mimem.concepts.definitions`, before this stage ran -- because the
+    question the caller is asking is "is this task answered", not "did I answer it".
+    """
     if concept.short_def:
-        return
+        return True
     support: Support | None = pool.best(concept.id, definitional=True)
     if support is not None and support.definitional:
         concept.short_def = support.written
+        return True
+    return False

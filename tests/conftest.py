@@ -58,3 +58,28 @@ def markdown_file(tmp_path: Path) -> Path:
     path = tmp_path / "note.md"
     path.write_text(MARKDOWN_SOURCE, encoding="utf-8")
     return path
+
+
+# -- the worked example ----------------------------------------------------------------------
+
+from worked_example import ANSWERS, _doc  # noqa: E402  (tests/fixtures is on sys.path)
+
+from mimem.config import Profile, load_profile  # noqa: E402
+from mimem.ir import Document  # noqa: E402
+
+
+@pytest.fixture
+def sample_doc() -> Document:
+    """The worked example's source paragraph, triaged and ready for stage 6."""
+    return _doc()
+
+
+@pytest.fixture
+def study() -> Profile:
+    return load_profile("study")
+
+
+@pytest.fixture
+def scripted_answers() -> dict[str, list[dict[str, object]]]:
+    """What the target rendering says, in the shape each task returns it."""
+    return {task: [dict(answer) for answer in answers] for task, answers in ANSWERS.items()}

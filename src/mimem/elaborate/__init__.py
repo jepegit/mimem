@@ -11,6 +11,7 @@ attention. So the budget is spent depth-first per concept, hardest and most cent
 it runs out where it runs out.
 """
 
+from mimem.elaborate.reconcile import Absence, Mode
 from mimem.elaborate.run import (
     GROUNDING_KINDS,
     Degradation,
@@ -23,8 +24,10 @@ from mimem.elaborate.run import (
 
 __all__ = [
     "GROUNDING_KINDS",
+    "Absence",
     "Degradation",
     "ElaborationReport",
+    "Mode",
     "elaborate",
     "ground",
     "plan_requests",

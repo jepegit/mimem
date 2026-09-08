@@ -685,6 +685,81 @@ def speak(
     _print_synthesis(result)
 
 
+@app.command("compare")
+def compare_paths(
+    source: Annotated[Path, typer.Argument(help="the document to build twice")],
+    out_dir: Annotated[Path, typer.Option("--out", "-o")] = Path("out/compare"),
+    fixtures: Annotated[
+        Path | None, typer.Option("--fixtures", help="replay a recorded run instead of paying")
+    ] = None,
+    provider: Annotated[
+        str, typer.Option("--provider", help=f"one of: {', '.join(PROVIDERS)}")
+    ] = "anthropic",
+    model: Annotated[str | None, typer.Option("--model")] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+    budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
+    as_json_output: Annotated[bool, typer.Option("--json", help="print the comparison as JSON")] = (
+        False
+    ),
+) -> None:
+    """Build one document twice, with and without a model, and say what the model changed.
+
+    This project's argument is that structure matters more than fluency, which is a claim about
+    what a model is worth here. This is how to check it: the deterministic build is the control,
+    the assisted build is the treatment, and the difference is what you paid for.
+
+    ``--fixtures`` compares against a recorded run, so the comparison is free and repeatable
+    after one `mimem record`.
+    """
+    from mimem.eval.compare import compare as run_compare
+
+    settings = Settings()
+    profile, listener = _profile_and_listener(profile_name, listener_file, settings)
+    client = (
+        FixtureClient(fixtures)
+        if fixtures is not None
+        else _make_client(None, True, model, settings, False, provider, base_url)
+    )
+
+    try:
+        result = run_compare(source, out_dir, profile, listener, client, budget=budget)
+    except IngestError as exc:
+        _fail(str(exc))
+        return
+    except BudgetExceededError as exc:
+        _fail(str(exc))
+        return
+
+    if as_json_output:
+        console.print_json(result.to_json())
+        return
+
+    console.print(f"[bold]{result.document}[/]  local vs. model\n")
+    table = Table("metric", "local", "with model", "change")
+    for change in result.changes():
+        arrow = {True: "[green]better[/]", False: "[red]worse[/]", None: ""}[change.better]
+        table.add_row(
+            change.name,
+            f"{change.local:g}",
+            f"{change.with_model:g}",
+            f"{change.delta:+g} {arrow}".strip(),
+        )
+    console.print(table)
+
+    if result.added:
+        added = ", ".join(f"{n} {task}" for task, n in sorted(result.added.items()))
+        console.print(f"the model wrote: [bold]{added}[/]")
+    if result.absences:
+        for kind, count in sorted(result.absences.items()):
+            console.print(f"  {count} x {kind}", style="dim")
+    console.print(f"cost: [bold]${result.dollars:.4f}[/] over {result.calls} calls")
+    per = result.cost_per_gloss
+    if per is not None:
+        console.print(f"  ${per:.4f} per term defined", style="dim")
+
+
 @app.command()
 def record(
     source: Annotated[Path, typer.Argument(help="the document to run against a live model")],

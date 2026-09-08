@@ -219,6 +219,25 @@ A straight reading: the retained content, verbalized, with no prequestions, retr
 Useful for seeing what the structural layer actually adds, and as a fallback when a document
 defeats the planner.
 
+## `compare`
+
+```bash
+uv run mimem compare paper.pdf --fixtures fixtures/paper
+```
+
+Builds one document twice, deterministic and model-assisted, and diffs the metrics. The
+deterministic build is the control; the difference is what the model was worth.
+
+| | |
+|---|---|
+| `--out` / `-o` | Where both builds go. Default `out/compare`. |
+| `--fixtures` | Compare against a recorded run, so the comparison is free. |
+| `--provider`, `--model`, `--base-url` | As for `build`. |
+| `--budget` | Hard cap in US dollars. |
+| `--json` | Print the comparison as JSON. |
+
+Writes `<out>/local/` and `<out>/with-model/`, so both programmes are there to read.
+
 ## `doctor`
 
 ```bash

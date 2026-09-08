@@ -7,6 +7,7 @@ measure whether the programme still has the properties the design asks for, not 
 learned anything.
 """
 
+from mimem.eval.compare import Comparison, compare
 from mimem.eval.harness import (
     BASELINE,
     CORPUS,
@@ -22,9 +23,11 @@ from mimem.eval.metrics import Corpus, Metrics, measure
 __all__ = [
     "BASELINE",
     "CORPUS",
+    "Comparison",
     "Corpus",
     "Metrics",
     "as_json",
+    "compare",
     "documents",
     "load_baseline",
     "measure",

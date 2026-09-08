@@ -150,7 +150,7 @@ def normalize(text: str) -> str:
 
     Idempotent, so calling it again inside a later stage costs nothing.
     """
-    return repair_diacritics(unicodedata.normalize("NFKC", text))
+    return drop_private_use(repair_diacritics(unicodedata.normalize("NFKC", text)))
 
 
 def verbalize_indices(text: str) -> str:
@@ -187,3 +187,21 @@ def verbalize_symbols(text: str, *, lexicon: dict[str, str] | None = None) -> st
     text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
     text = _WHITESPACE.sub(" ", text)
     return text.strip()
+
+
+#: The Unicode private use area. A font may put anything at all in it, and what it puts there is
+#: knowable only from the font -- which is gone by the time the text reaches us. Two corpus
+#: papers carry them: ACS sets the double bond of a carbonyl at U+E0C8, so "O-(C=O)-O" arrives
+#: as "O-(C\ue0c8O)-O", and an em dash at U+E0D5, so a title reads
+#: "Inhomogeneities\ue0d5Nanoscale to Mesoscale\ue0d5on the Durability".
+#:
+#: They become a space rather than a guess. Eight ``TTS-01`` errors in one paper were the first
+#: of these, and a speech engine has nothing to say about a character with no meaning; but a
+#: mapping inferred from two PDFs would be asserting something about every font that uses the
+#: range, and the two observed code points do not even agree on what kind of thing they are.
+PRIVATE_USE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U000ffffd\U00100000-\U0010fffd]")
+
+
+def drop_private_use(text: str) -> str:
+    """Replace private-use characters with a space, leaving nothing unspeakable behind."""
+    return PRIVATE_USE.sub(" ", text)

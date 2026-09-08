@@ -188,6 +188,7 @@ Part 1 — document in, audio out — is built. Part 2 — playback and review a
 | ✅ **M7** | The hand-off to a speech engine. `mimem build paper.pdf --speak sapi` ends in a WAV you can play. |
 | ✅ **M8** | Reach: one adapter for every OpenAI-shaped server, hosted or local, and `mimem doctor` to say what your machine can actually get to. |
 | ✅ **M9** | Both paths: the deterministic pipeline runs as the *control*, not the fallback, and `mimem compare` says what a model was actually worth. |
+| ✅ **M10–M12** | Rule enforcement and the rules a critic pass found; more voices, including ElevenLabs, and MP3 when `ffmpeg` is there. |
 
 Two things you should know before trusting it. The **live API adapter has never been run** (there
 was no key in the environment it was written in). And the evaluation that now exists is the

@@ -641,6 +641,12 @@ def speak(
     use_cache: Annotated[
         bool, typer.Option("--cache/--no-cache", help="reuse audio for unchanged beats")
     ] = True,
+    audio_format: Annotated[
+        str, typer.Option("--format", help="wav, or mp3 if ffmpeg is installed")
+    ] = "wav",
+    api_key: Annotated[
+        str | None, typer.Option("--api-key", help="for --engine openai or elevenlabs")
+    ] = None,
 ) -> None:
     """Stage 9: the script as a playable file, with the pauses actually in it.
 
@@ -655,7 +661,7 @@ def speak(
     try:
         engine = create_engine(
             engine_name,
-            EngineOptions(voice=voice, model=model, rate=rate, base_url=base_url),
+            EngineOptions(voice=voice, model=model, rate=rate, base_url=base_url, api_key=api_key),
         )
     except EngineError as exc:
         _fail(str(exc))
@@ -680,8 +686,24 @@ def speak(
             _fail(str(exc))
             return
 
-    for path in result.write(destination):
+    written = result.write(destination)
+    for path in written:
         console.print(f"[green]wrote[/] {path}")
+
+    if audio_format == "mp3":
+        from mimem.speak.encode import ConversionError, to_mp3
+
+        try:
+            mp3 = to_mp3(written[0])
+        except ConversionError as exc:
+            # The WAV is already on disk, so this is a smaller result rather than a failed run.
+            console.print(f"[yellow]no mp3[/] {exc}")
+        else:
+            saved = 1 - mp3.stat().st_size / written[0].stat().st_size
+            console.print(f"[green]wrote[/] {mp3}  ({saved:.0%} smaller; the WAV is kept)")
+    elif audio_format != "wav":
+        _fail(f"unknown format {audio_format!r}; use wav or mp3")
+
     _print_synthesis(result)
 
 

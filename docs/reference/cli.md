@@ -192,12 +192,14 @@ silence. Takes a script JSON or a directory containing one.
 
 | | |
 |---|---|
-| `--engine` / `-e` | `silent`, `sapi`, `piper` or `openai`. Default `silent`. |
+| `--engine` / `-e` | `silent`, `sapi`, `piper`, `openai` or `elevenlabs`. Default `silent`. |
 | `--voice` | The engine's own voice name. For `piper`, the `.onnx` file. |
 | `--model` | Piper voice file, or the TTS model for `openai`. |
 | `--base-url` | For `--engine openai`; any compatible server. |
 | `--rate` | SAPI speaking rate, -10 to 10. |
 | `--cache` / `--no-cache` | Reuse audio for unchanged beats. Default on. |
+| `--format` | `wav` (default) or `mp3`, when `ffmpeg` is installed. |
+| `--api-key` | For `--engine openai` or `elevenlabs`. |
 
 Writes `audio.wav` and `timings.json`. See [Turning it into audio](../listening/audio.md).
 
@@ -322,3 +324,4 @@ Version, and the file formats this build can read.
 | `MIMEM_CACHE_DIR` | Where model answers are cached. Default `.mimem-cache`. |
 | `ANTHROPIC_API_KEY` | Only read with `--llm --provider anthropic`. |
 | `OPENAI_API_KEY` | Only read with `--llm --provider openai`, and by the `openai` speech engine. |
+| `ELEVENLABS_API_KEY` | Only read by `--engine elevenlabs`. |

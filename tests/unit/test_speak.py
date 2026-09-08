@@ -293,8 +293,9 @@ def test_every_named_engine_can_be_created() -> None:
 def test_an_unknown_engine_lists_the_known_ones() -> None:
     from mimem.speak import EngineError
 
+    # This example used to be "elevenlabs", which stopped being unknown in M12.
     with pytest.raises(EngineError, match="silent"):
-        create("elevenlabs")
+        create("a-voice-that-does-not-exist")
 
 
 def test_piper_takes_its_model_from_either_flag() -> None:

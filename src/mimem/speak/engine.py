@@ -343,7 +343,7 @@ class EngineOptions:
 
 
 #: Every adapter, by the name ``--engine`` takes.
-ENGINES = ("silent", "sapi", "piper", "openai")
+ENGINES = ("silent", "sapi", "piper", "openai", "elevenlabs")
 
 
 def create(name: str, options: EngineOptions | None = None) -> Engine:
@@ -366,6 +366,17 @@ def create(name: str, options: EngineOptions | None = None) -> Engine:
         if opts.base_url:
             engine.base_url = opts.base_url
         return engine
+    if name == "elevenlabs":
+        # Imported here rather than at module scope: it is the one adapter with its own API
+        # shape, and nothing else in this module should come to depend on it.
+        from mimem.speak.elevenlabs import ElevenLabsEngine
+
+        eleven = ElevenLabsEngine(api_key=opts.api_key)
+        if opts.voice:
+            eleven.voice = opts.voice
+        if opts.model:
+            eleven.model = opts.model
+        return eleven
     raise EngineError(f"unknown engine {name!r}; available: {', '.join(ENGINES)}")
 
 

@@ -468,7 +468,13 @@ by hand or by model, without an input that proves it fires.
 *Done when:* one rule in the suite was drafted by a model, passed all six criteria, and was
 reviewed and committed like any other.
 
-**M12 — more voices (0.5 week).** ElevenLabs, Kokoro if it needs code, optional MP3.
+**M12 — more voices (0.5 week). Done.** ElevenLabs has its own adapter, because its API is not
+OpenAI-shaped and, more to the point, **it will not return a WAV**: the options are MP3, raw PCM
+and mu-law, so the adapter asks for PCM and writes the header itself. Kokoro needed no code, as
+guessed -- the usual way to serve it speaks the OpenAI shape -- but that is documented as
+untested, because no Kokoro server was available here. MP3 is offered when `ffmpeg` is on the
+PATH and never required: a real nineteen-minute run went from 47.7 MB to 8.7 MB, and the WAV is
+kept because `timings.json` describes it.
 
 M10 before M11 is not negotiable: the acceptance checks are the whole safety argument for
 generated rules, and criterion 3 needs the corpus.

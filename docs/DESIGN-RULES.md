@@ -64,6 +64,11 @@ lint)*
 no "see Figure 3", no "as shown in the table below", no "in the previous chapter" unless that
 chapter is in the same audio programme. *(lint: forward/dangling-reference check)*
 
+**STR-09** A **recap or transition carries content**, not only a label. "That was methods." and
+"More on drift coefficient." satisfy `STR-06` and `SIG-01` and say nothing. *(lint, warning)*
+
+*Also from a critic pass. A rule that can be satisfied by a label is a rule that will be.*
+
 ---
 
 ## 2. Segmentation and pacing (`SEG-*`, `DUR-*`, `PAU-*`)
@@ -256,6 +261,15 @@ review block. Over-prompting destroys flow and burns the duration budget. *(conf
 
 **RET-05** Every prompt/answer pair is emitted to `cards.json` with its concept ID, difficulty,
 source span and prompt type. *(planner)*
+
+**RET-06** No two cards **answer with the same sentence**. A distinct question that returns
+information the listener has already been given spends retrieval practice without having it.
+*(lint, warning)*
+
+*Found by a critic pass rather than from the literature: one build asked about "reference
+resonator", "resonant strain sensor" and "resonant strain" and answered all three with one
+sentence. Not to be confused with the review block re-asking a card, which is what `STR-07`
+requires.*
 
 **PRQ-01** Prequestions are drawn from `cards.json`, 2–4 per document and 0–2 per long section.
 *(KB §4.5; planner + lint)*

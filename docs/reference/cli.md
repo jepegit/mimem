@@ -219,6 +219,20 @@ A straight reading: the retained content, verbalized, with no prequestions, retr
 Useful for seeing what the structural layer actually adds, and as a fallback when a document
 defeats the planner.
 
+## `rules`
+
+```bash
+uv run mimem rules
+uv run mimem rules --check
+```
+
+Every rule the linter runs, what it reads, and its severity. `--check` exits non-zero if a rule
+is *defined but never registered* — a rule the linter never calls is a rule that does not exist,
+and enumerating classes and enumerating the registry are different questions.
+
+For the harder question — whether a *test* would fail if a rule silently stopped working — run
+`tools/mutate_rules.py`, which answers it by breaking each rule in turn.
+
 ## `compare`
 
 ```bash

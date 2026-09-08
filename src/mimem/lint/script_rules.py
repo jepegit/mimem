@@ -767,34 +767,6 @@ class FigureDescriptionFollowsTemplate(ScriptRule):
 
 
 #: The M4 script rule set, in report order.
-SCRIPT_RULE_TYPES: tuple[type[ScriptRule], ...] = (
-    PrequestionsFromCards,
-    SectionEndsWithRecapAndPrompt,
-    ReviewIsInterleaved,
-    SegmentDuration,
-    NewTermBudget,
-    PromptHasAnswer,
-    PromptHasPause,
-    RepeatsAreNotVerbatim,
-    MinimumSpacingGap,
-    BeatsAreGrounded,
-    GeneratedContentIsMarked,
-    ImageryHasAPause,
-    GeneratedFactsAreGrounded,
-    AnchorsAreUnique,
-    AnalogiesStateTheirLimit,
-    ChunksAlignWithSentences,
-    AnaphoraResolvesAcrossBeats,
-    TableCaptionComesFirst,
-    FigureDescriptionFollowsTemplate,
-)
-
-
-def script_rules(profile: Profile | None = None) -> tuple[ScriptRule, ...]:
-    """Instantiate the script rules against a profile, whose budgets several of them read."""
-    return tuple(rule(profile) for rule in SCRIPT_RULE_TYPES)
-
-
 # -- helpers ---------------------------------------------------------------------------------
 
 
@@ -829,3 +801,158 @@ def _verbatim(a: str, b: str) -> bool:
     return any(
         tuple(wb[i : i + VERBATIM_NGRAM]) in runs for i in range(len(wb) - VERBATIM_NGRAM + 1)
     )
+
+
+# -- what a critic pass found ------------------------------------------------------------------
+#
+# The two rules below did not come from the literature or from the design document. They came
+# from reading a finished programme and asking what was wrong with it that no rule caught --
+# the "critic pass" in docs/PLAN-ai.md, run by hand. Both are warnings: they fire on the corpus
+# today, and they describe a programme that is worse than it should be rather than one that is
+# broken.
+
+
+class AnswersAreDistinct(ScriptRule):
+    """RET-06: two questions do not have the same answer.
+
+    Found by reading a build: ten cards carried seven distinct answer sentences. One sentence
+    was the answer to questions about "reference resonator", "resonant strain sensor" *and*
+    "resonant strain" -- three questions, one fact, asked three times.
+
+    That is retrieval practice being spent without being had. The listener is asked something
+    new and told something they have already been told, which is the failure the whole ``RET-*``
+    family exists to produce the opposite of.
+
+    **This is not the review block re-asking**, which is deliberate and is why ``STR-07`` exists.
+    That was the first reading of the same evidence and it was wrong: every repeated *answer
+    beat* turned out to be one body ask and one review ask of the same card, exactly as designed.
+    What survives that check is the real finding -- distinct *cards*, sharing a sentence.
+
+    The comparison strips the "Here's the answer about X." lead, because that is a template
+    carrying the subject's name and differs for every card by construction. Comparing whole
+    answers reports nothing and looks like a rule that passes.
+    """
+
+    id = "RET-06"
+    description = "two cards do not answer with the same sentence"
+    severity = Severity.WARNING
+
+    #: The response-congruent lead every card's answer opens with (rules RET-02, RET-04).
+    LEAD = re.compile(r"^Here's the answer about .*?\.\s*", re.IGNORECASE)
+
+    def check(self, script: Script) -> list[Violation]:
+        by_sentence: dict[str, list[str]] = {}
+        for card in script.cards:
+            core = self.LEAD.sub("", card.answer).strip()
+            if core:
+                by_sentence.setdefault(core, []).append(card.subject)
+
+        out: list[Violation] = []
+        for core, subjects in by_sentence.items():
+            if len(subjects) < 2:
+                continue
+            asked = ", ".join(repr(s) for s in subjects)
+            out.append(
+                self._violation(f"one sentence answers {len(subjects)} questions ({asked})", core)
+            )
+        return out
+
+
+class ScaffoldingSaysSomething(ScriptRule):
+    """STR-09: a recap or a transition carries content, not only a label.
+
+    Also from the critic pass. One build produced "That was methods.", "That was results.",
+    "That was discussion." and "That was conclusion." -- four recaps saying nothing a listener
+    did not already know -- and transitions reading "More on drift coefficient."
+
+    ``STR-06`` requires that a section end with a recap. It does not require the recap to
+    contain anything, and a rule that can be satisfied by a label is a rule that will be. The
+    same goes for ``SIG-01``'s signposts: announcing a topic is useful, announcing it and then
+    saying nothing about it is a beat the listener sits through.
+
+    Measured as content words that are not the section title, the concept's name, or the
+    template's own vocabulary. A beat with nothing left after that subtraction could be cut with
+    no loss, which is the definition being enforced.
+    """
+
+    id = "STR-09"
+    description = "recaps and transitions say something"
+    severity = Severity.WARNING
+
+    KINDS = frozenset({BeatType.RECAP, BeatType.TRANSITION})
+
+    #: The words the templates themselves supply. A beat made only of these plus a name has had
+    #: no content put into it.
+    TEMPLATE_WORDS = frozenset(
+        {
+            "that", "was", "so", "in", "one", "line", "more", "on", "the", "a", "an", "and",
+            "next", "now", "here", "s", "of", "to", "is", "are", "this", "these", "with",
+            "part", "section", "about", "for", "we", "it", "then", "first", "second", "third",
+        }
+    )  # fmt: skip
+
+    #: Below this many content words, the beat is a label.
+    MIN_CONTENT_WORDS = 2
+
+    def check(self, script: Script) -> list[Violation]:
+        titles = {w for s in script.sections for w in _words(s.title)}
+        out: list[Violation] = []
+        for beat in script.beats():
+            if beat.type not in self.KINDS or not beat.text.strip():
+                continue
+            names = {
+                w
+                for cid in beat.concept_ids
+                if cid in script.registry
+                for w in _words(script.registry[cid].canonical)
+            }
+            content = [
+                w for w in _words(beat.text) if w not in self.TEMPLATE_WORDS | titles | names
+            ]
+            if len(content) < self.MIN_CONTENT_WORDS:
+                out.append(
+                    self._violation(
+                        f"{beat.type.value} carries no content beyond its label",
+                        beat.text,
+                        beat.id,
+                    )
+                )
+        return out
+
+
+#: Every script rule, in the order they run.
+#:
+#: **At the end of the file on purpose.** This sat above the classes it lists, so a rule
+#: defined below it could not be added without moving code -- and nothing made anyone
+#: notice. Two rules were written, given triggers, covered by tests and never ran, because
+#: the trigger test enumerates *classes* and this list is what the linter actually calls.
+#: `test_every_rule_is_registered` now closes that gap; keeping the list last means the
+#: next rule is appended rather than wedged in.
+SCRIPT_RULE_TYPES: tuple[type[ScriptRule], ...] = (
+    PrequestionsFromCards,
+    SectionEndsWithRecapAndPrompt,
+    ReviewIsInterleaved,
+    SegmentDuration,
+    NewTermBudget,
+    PromptHasAnswer,
+    PromptHasPause,
+    RepeatsAreNotVerbatim,
+    MinimumSpacingGap,
+    BeatsAreGrounded,
+    GeneratedContentIsMarked,
+    ImageryHasAPause,
+    GeneratedFactsAreGrounded,
+    AnchorsAreUnique,
+    AnalogiesStateTheirLimit,
+    ChunksAlignWithSentences,
+    AnaphoraResolvesAcrossBeats,
+    TableCaptionComesFirst,
+    FigureDescriptionFollowsTemplate,
+    AnswersAreDistinct,
+    ScaffoldingSaysSomething,
+)
+
+
+def script_rules(profile: Profile | None = None) -> tuple[ScriptRule, ...]:
+    """Instantiate the script rules against a profile, whose budgets several of them read."""
+    return tuple(rule(profile) for rule in SCRIPT_RULE_TYPES)

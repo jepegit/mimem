@@ -67,8 +67,8 @@ uv run mimem build paper.pdf --out out/paper
 ```
 
 That is the whole pipeline: read the PDF, work out what is worth saying, decide how to say it,
-lay it out as a programme, write four files, and check the result against the thirty design rules
-that can be checked mechanically — of ninety-one the programme is built to. It exits non-zero if it
+lay it out as a programme, write four files, and check the result against the thirty-two design rules
+that can be checked mechanically — of ninety-three the programme is built to. It exits non-zero if it
 broke one, so a bad script cannot be produced quietly.
 
 <table>

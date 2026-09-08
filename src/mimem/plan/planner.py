@@ -174,6 +174,7 @@ def plan(
 
     # 13. re-check the segment sizes, and say how long the finished programme actually is.
     _split_oversized(ctx, script)
+    _retarget_transitions(ctx, script)
     _retime_orientation(ctx, script, prequestions, problem)
 
     # 14. the exposure log and the hand-off to part two (SPC-03).
@@ -318,6 +319,11 @@ def _card_pool(ctx: _Context, groups: list[tuple[Block | None, list[Block]]]) ->
     """
     cards: list[Card] = []
     used: set[str] = set()
+    # The source sentences already promised to a card. `SupportPool` tracks spending per
+    # *concept*, so a sentence spent by one concept is still unspent for the next -- which
+    # is right for exposition and wrong for cards, where it means two questions with one
+    # answer (rule RET-06).
+    spoken_answers: set[str] = set()
     first_mention = _first_mentions(ctx)
     order = {block.id: block.order for block in ctx.doc.blocks}
     for heading, blocks in groups:
@@ -336,7 +342,7 @@ def _card_pool(ctx: _Context, groups: list[tuple[Block | None, list[Block]]]) ->
         fallback = sorted(eligible, key=lambda c: order.get(first_mention.get(c.id, ""), 10**6))
         concept = next(iter(introduced_here or fallback), None)
 
-        support = ctx.support.best(concept.id, definitional=True) if concept else None
+        support = _unshared_support(ctx, concept, spoken_answers) if concept else None
         if concept is None:
             # A paper with thirty sections runs out of unused concepts before it runs out of
             # sections. Asking about one twice is not a failure -- at this distance it is
@@ -347,6 +353,7 @@ def _card_pool(ctx: _Context, groups: list[tuple[Block | None, list[Block]]]) ->
         if concept is not None and support is not None:
             ctx.support.spend(support)
             used.add(concept.id)
+            spoken_answers.add(support.spoken)
             cards.append(
                 make.make_card(concept, support, _section_id(heading), ctx.profile, ctx.listener)
             )
@@ -400,6 +407,56 @@ def _first_mentions(ctx: _Context) -> dict[str, str]:
             if concept_id not in out and pattern.search(block.text):
                 out[concept_id] = block.id
     return out
+
+
+def _unshared_support(ctx: _Context, concept: Concept, taken: set[str]) -> Support | None:
+    """The best sentence for this concept that no other card is already using (rule RET-06).
+
+    ``SupportPool.best`` returns the strongest support "used or not", and its spending ledger is
+    keyed per concept -- both correct for exposition, where one sentence can reasonably serve two
+    ideas. For cards it is not: on the sensor paper it produced one sentence answering questions
+    about "reference resonator", "resonant strain sensor" *and* "resonant strain". Three
+    questions, one fact, and retrieval practice spent without being had.
+
+    Falls back to the shared sentence rather than to nothing. A section with only one usable
+    sentence should still get its question (``STR-06``); the duplicate is then reported by
+    ``RET-06`` rather than silently costing the section its card.
+    """
+    options = ctx.support.by_concept.get(concept.id, [])
+    definitional = [s for s in options if s.definitional]
+    for candidate in (*definitional, *options):
+        if candidate.spoken not in taken:
+            return candidate
+    return ctx.support.best(concept.id, definitional=True)
+
+
+def _retarget_transitions(ctx: _Context, script: Script) -> None:
+    """Withdraw any announcement the beats after it no longer keep (rule SEG-04).
+
+    Transitions are chosen in ``_body``, and three later steps insert beats after them:
+    ``_add_segment_prompts``, the budget's cutting pass, and ``_split_oversized``. A promise
+    made before those ran can be false by the time a listener hears it -- "More on measurement
+    resonator", then a question about resonant strain.
+
+    Rather than move the transition or reorder the pipeline, the announcement is *withdrawn*:
+    the beat falls back to naming the section, which is a smaller claim and always accurate.
+    Saying less is the right way to stop being wrong.
+    """
+    beats = script.beats()
+    window = ANNOUNCE_WINDOW
+    for index, beat in enumerate(beats):
+        if beat.type is not BeatType.TRANSITION or not beat.concept_ids:
+            continue
+        announced = set(beat.concept_ids)
+        if any(
+            announced & set(later.concept_ids) for later in beats[index + 1 : index + 1 + window]
+        ):
+            continue
+        section = script.section_of(beat.id)
+        title = section.title if section else ""
+        beat.text = make.section_fallback_transition(ctx.factory, title)
+        beat.concept_ids = []
+        ctx.announced -= announced
 
 
 def _prequestions(ctx: _Context, cards: list[Card]) -> list[Card]:
@@ -540,14 +597,40 @@ def _segment(ctx: _Context, beats: list[Beat], section_id: str, title: str) -> l
     return out
 
 
+#: How many beats into the next segment an announcement may look. A transition promises what
+#: comes *next*; a concept three beats in is not next.
+ANNOUNCE_WINDOW = 3
+
+
+def _opening_concepts(segment: Segment) -> list[str]:
+    """The concepts the next few beats are actually about, in order.
+
+    ``segment.concept_ids`` is every concept anywhere in the segment, and announcing from that
+    set produced transitions that were simply untrue: "More on measurement resonator" followed
+    immediately by a question about resonant strain, four times in one programme. The concept
+    was in the segment; it was not what came next. Rule ``SEG-04`` now checks the promise, and
+    this is what keeps it.
+    """
+    seen: dict[str, None] = {}
+    for beat in segment.beats[:ANNOUNCE_WINDOW]:
+        for concept_id in beat.concept_ids:
+            seen.setdefault(concept_id, None)
+    return list(seen)
+
+
 def _next_concept(ctx: _Context, segment: Segment) -> tuple[Concept | None, bool]:
     """What a transition should announce, and whether it is new to the listener.
 
     Never the same concept two boundaries running: "more on gradient boosting" three times in a
     row is the template talking, and rule ``VOI-03`` exists to keep that out of the audio.
+
+    Only concepts the *opening* of the next segment is about, so that the announcement is true
+    when the listener hears what follows it (rule ``SEG-04``). Announcing nothing is better than
+    announcing wrongly: ``transition_beat`` falls back to naming the section, which is a smaller
+    claim and always accurate.
     """
     known: Concept | None = None
-    for concept_id in segment.concept_ids:
+    for concept_id in _opening_concepts(segment):
         concept = ctx.registry.concepts.get(concept_id)
         if concept is None or concept_id in ctx.announced:
             continue

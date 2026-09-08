@@ -858,65 +858,61 @@ class AnswersAreDistinct(ScriptRule):
         return out
 
 
-class ScaffoldingSaysSomething(ScriptRule):
-    """STR-09: a recap or a transition carries content, not only a label.
+class TransitionsAnnounceWhatFollows(ScriptRule):
+    """SEG-04: a transition names the concept the next beats are actually about.
 
-    Also from the critic pass. One build produced "That was methods.", "That was results.",
-    "That was discussion." and "That was conclusion." -- four recaps saying nothing a listener
-    did not already know -- and transitions reading "More on drift coefficient."
+    This rule replaced one of its author's own, which is why the reasoning is written down.
 
-    ``STR-06`` requires that a section end with a recap. It does not require the recap to
-    contain anything, and a rule that can be satisfied by a label is a rule that will be. The
-    same goes for ``SIG-01``'s signposts: announcing a topic is useful, announcing it and then
-    saying nothing about it is a beat the listener sits through.
+    The critic pass produced ``STR-09``, "a recap or transition carries content, not only a
+    label", on the evidence that a programme contained "That was methods." and "More on drift
+    coefficient." It fired twelve times. Both halves turned out to be wrong:
 
-    Measured as content words that are not the section title, the concept's name, or the
-    template's own vocabulary. A beat with nothing left after that subtraction could be cut with
-    no loss, which is the definition being enforced.
+    **The recaps were right as they were.** A section that introduces no new concept has nothing
+    new to name, and the obvious alternative -- name what it merely mentioned -- had already been
+    tried in the planner and reverted, because it produced the previous section's recap with a
+    different heading in front of it, eight times in one document. "That was methods." is the
+    honest floor for a template that cannot paraphrase, not a defect.
+
+    **The transitions were wrong, but not for carrying no content.** "More on measurement
+    resonator" tells the listener something real. What was actually broken is that it was *not
+    true*: four of six transitions in one programme announced a concept and were followed
+    immediately by a question about a different one, because the planner chose from every
+    concept anywhere in the next segment. The listener is promised one thing and given another,
+    which is worse than a thin signpost and invisible to a rule about word counts.
+
+    So the rule is the promise, and only the promise. A transition that names no concept passes:
+    "Still on the methods." is a smaller claim and always accurate.
     """
 
-    id = "STR-09"
-    description = "recaps and transitions say something"
+    id = "SEG-04"
+    description = "a transition announces what actually comes next"
     severity = Severity.WARNING
 
-    KINDS = frozenset({BeatType.RECAP, BeatType.TRANSITION})
-
-    #: The words the templates themselves supply. A beat made only of these plus a name has had
-    #: no content put into it.
-    TEMPLATE_WORDS = frozenset(
-        {
-            "that", "was", "so", "in", "one", "line", "more", "on", "the", "a", "an", "and",
-            "next", "now", "here", "s", "of", "to", "is", "are", "this", "these", "with",
-            "part", "section", "about", "for", "we", "it", "then", "first", "second", "third",
-        }
-    )  # fmt: skip
-
-    #: Below this many content words, the beat is a label.
-    MIN_CONTENT_WORDS = 2
+    #: How far past the transition to look. Matches ``ANNOUNCE_WINDOW`` in the planner: the
+    #: promise is about what comes *next*, and three beats is the outer edge of next.
+    WINDOW = 3
 
     def check(self, script: Script) -> list[Violation]:
-        titles = {w for s in script.sections for w in _words(s.title)}
+        beats = script.beats()
         out: list[Violation] = []
-        for beat in script.beats():
-            if beat.type not in self.KINDS or not beat.text.strip():
+        for index, beat in enumerate(beats):
+            if beat.type is not BeatType.TRANSITION or not beat.concept_ids:
                 continue
-            names = {
-                w
+            announced = set(beat.concept_ids)
+            following = beats[index + 1 : index + 1 + self.WINDOW]
+            if any(announced & set(later.concept_ids) for later in following):
+                continue
+            names = ", ".join(
+                script.registry[cid].canonical if cid in script.registry else cid
                 for cid in beat.concept_ids
-                if cid in script.registry
-                for w in _words(script.registry[cid].canonical)
-            }
-            content = [
-                w for w in _words(beat.text) if w not in self.TEMPLATE_WORDS | titles | names
-            ]
-            if len(content) < self.MIN_CONTENT_WORDS:
-                out.append(
-                    self._violation(
-                        f"{beat.type.value} carries no content beyond its label",
-                        beat.text,
-                        beat.id,
-                    )
+            )
+            out.append(
+                self._violation(
+                    f"announces {names!r}, which the next {len(following)} beats are not about",
+                    beat.text,
+                    beat.id,
                 )
+            )
         return out
 
 
@@ -949,7 +945,7 @@ SCRIPT_RULE_TYPES: tuple[type[ScriptRule], ...] = (
     TableCaptionComesFirst,
     FigureDescriptionFollowsTemplate,
     AnswersAreDistinct,
-    ScaffoldingSaysSomething,
+    TransitionsAnnounceWhatFollows,
 )
 
 

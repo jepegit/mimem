@@ -308,12 +308,34 @@ def _answer_two_questions_with_one_sentence(script: Script) -> None:
     script.cards.append(twin)
 
 
-def _empty_the_recaps(script: Script) -> None:
-    """STR-09: a recap that names its section and says nothing else."""
-    for section in script.sections:
-        for beat in section.beats():
-            if beat.type is BeatType.RECAP:
-                beat.text = f"That was {section.title.lower()}."
+def _announce_the_wrong_thing(script: Script) -> None:
+    """SEG-04: a transition that announces a concept the beats after it are not about.
+
+    Inserted rather than edited: the fixture is one short section and the planner puts a
+    transition only at a segment boundary, so there is none to corrupt.
+    """
+    concept_id = next(iter(script.registry), "c1")
+    segment = script.sections[-1].segments[-1]
+    segment.beats.append(
+        Beat(
+            id="t_wrong",
+            type=BeatType.TRANSITION,
+            text="More on something the next beats never mention.",
+            concept_ids=[concept_id],
+            generated=True,
+            est_seconds=2.0,
+        )
+    )
+    segment.beats.extend(
+        Beat(
+            id=f"e_after{i}",
+            type=BeatType.EXPOSITION,
+            text="An unrelated sentence about nothing in particular.",
+            spans=list(script.beats()[0].spans),
+            est_seconds=3.0,
+        )
+        for i in range(3)
+    )
 
 
 CASES: list[tuple[str, Mutator]] = [
@@ -337,7 +359,7 @@ CASES: list[tuple[str, Mutator]] = [
     ("TBL-02", _table_leads_with_a_value),
     ("FIG-01", _figure_without_its_kind),
     ("RET-06", _answer_two_questions_with_one_sentence),
-    ("STR-09", _empty_the_recaps),
+    ("SEG-04", _announce_the_wrong_thing),
 ]
 IDS = [case[0] for case in CASES]
 
@@ -357,9 +379,16 @@ PREPARE: dict[str, Mutator] = {"TBL-02": _add_a_table, "FIG-01": _add_a_figure}
 #: these rules *do* fire, so the day the planner is fixed the entry fails and has to be removed.
 #: A skip would have rotted silently.
 KNOWN_FINDINGS: dict[str, str] = {
-    "RET-06": "distinct cards still share a supporting sentence; see docs/PLAN-ai.md",
-    "STR-09": "recaps read 'That was methods.' and transitions read 'More on X.'",
+    "RET-06": (
+        "a section whose concept has only one usable sentence still shares it; the planner "
+        "prefers an unshared sentence and falls back rather than losing the section's question"
+    ),
 }
+
+#: ``STR-09`` was here and is gone, which is the mechanism working. It was replaced by
+#: ``SEG-04`` when the evidence turned out to be about broken promises rather than thin text,
+#: and the planner was then fixed so that ``SEG-04`` passes on the clean plan. An entry that
+#: stops firing fails this test and has to be removed, which is how it left.
 
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)

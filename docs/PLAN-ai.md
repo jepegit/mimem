@@ -360,7 +360,21 @@ seven sentences, one sentence answering three questions) and `STR-09` (recaps re
 methods." and transitions reading "More on drift coefficient."). Together they report fourteen
 warnings on the corpus, none of which anything could see before.
 
-**Both are known-firing, and that is tracked rather than hidden.** `KNOWN_FINDINGS` in the script
+**One of the two rules was then withdrawn by its own evidence.** `STR-09` said scaffolding must
+carry content. Looking at *why* the transitions were bad showed they were not thin, they were
+**untrue**: four of six announced one concept and were followed immediately by a question about
+another, because the planner chose from every concept anywhere in the next segment. And the
+recaps it flagged were fine -- naming what a section merely mentioned had already been tried in
+the planner and reverted for producing eight duplicate recaps. So `STR-09` became `SEG-04`, "a
+transition announces what actually comes next", which is narrower and true.
+
+Then the planner was fixed for both: announcements are chosen from the *opening* of the next
+segment and withdrawn if later insertions falsify them, and a card prefers a supporting sentence
+no other card is using. Warnings on the sensor paper went from 39 to 22 -- below the 25 it had
+before either rule existed. The card pool went from ten cards with seven distinct answers to
+nine with eight.
+
+**What remains is known-firing, and that is tracked rather than hidden.** `KNOWN_FINDINGS` in the script
 lint tests asserts each still fires on the clean plan, so the day the planner is fixed the entry
 fails and has to be removed. A skip would have rotted silently.
 

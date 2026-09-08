@@ -117,7 +117,7 @@ def build_all(
         )
 
     script = plan(doc, registry, profile, listener)
-    artefacts = render(script, doc)
+    artefacts = render(script, doc, elaboration)
 
     (out_dir / "doc.ir.json").write_text(doc.to_json(), encoding="utf-8")
     (out_dir / "registry.json").write_text(registry.to_json(), encoding="utf-8")
@@ -147,6 +147,9 @@ def replan(out_dir: Path, profile: Profile, listener: Listener | None = None) ->
     registry = ConceptRegistry.from_json((out_dir / "registry.json").read_bytes())
     script = plan(doc, registry, profile, listener)
     render_figures(doc, out_dir)
+    # No elaboration report: `replan` re-runs stages 7 to 9 and stage 6 is not among them, so
+    # there is nothing new to record. The manifest keeps the shape it had without the section
+    # rather than claiming an empty run.
     artefacts = render(script, doc)
 
     (out_dir / "script.json").write_text(script.to_json(), encoding="utf-8")

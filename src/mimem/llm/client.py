@@ -13,11 +13,15 @@ should be developable, testable and runnable without spending anything:
   is a by-product of one real run rather than something anyone has to hand-write.
 * :class:`AnthropicClient` is the live one.
 
-**On the live client: it has not been run.** There is no API key in the environment this was
-built in, so the code below has never made a request. It is type-checked against the installed
-SDK -- which is worth something, and caught one real bug -- but type-checking is not the same as
-working. Everything around it is exercised; this adapter is not, and saying so is more useful
-than a confident silence. Validate it with one small document before pointing it at a book.
+**On the live client: it has now been run**, after being written five milestones earlier and
+carrying a "never exercised" warning the whole time. The first request it ever made found a bug
+that type-checking could not: it sent the cached prefix as two text blocks whether or not either
+had text in it, and the API answered ``cache_control cannot be set for empty text blocks``. A
+task with no document -- ``verify`` has none -- would have failed every time, for a reason
+having nothing to do with the task. See :func:`_system_blocks`.
+
+That is the argument for running a thing rather than reasoning about it, and it is worth
+remembering that ``mypy --strict`` had been clean over this file for five milestones.
 """
 
 from __future__ import annotations
@@ -253,6 +257,25 @@ class RecordingClient(BaseClient):
         return response
 
 
+def _system_blocks(request: Request) -> list[dict[str, Any]]:
+    """The cached prefix, with empty parts left out.
+
+    ``cache_control cannot be set for empty text blocks`` -- the API's words, and the first
+    thing the live adapter ever heard back after the billing error cleared. Both halves of the
+    prefix are optional in practice: the ``verify`` task carries no document, a short source
+    can verbalize to nothing, and a task built without a system prompt is legal here. Sending
+    the block anyway asks the API to cache nothing, which it refuses, and the whole request
+    fails for a reason that has nothing to do with the task.
+
+    Written after a real 400, not from the documentation, which is the point of having run it.
+    """
+    blocks: list[dict[str, Any]] = []
+    for text in (request.system, request.document):
+        if text and text.strip():
+            blocks.append({"type": "text", "text": text, "cache_control": {"type": "ephemeral"}})
+    return blocks
+
+
 def _message_content(request: Request) -> Any:
     """The user turn: the instruction, and the picture when the task is about one.
 
@@ -305,18 +328,7 @@ class AnthropicClient(BaseClient):
         message = self._client.messages.create(
             model=request.model or self.model,
             max_tokens=request.max_tokens,
-            system=[
-                {
-                    "type": "text",
-                    "text": request.system,
-                    "cache_control": {"type": "ephemeral"},
-                },
-                {
-                    "type": "text",
-                    "text": request.document,
-                    "cache_control": {"type": "ephemeral"},
-                },
-            ],
+            system=cast(Any, _system_blocks(request)),
             messages=[{"role": "user", "content": _message_content(request)}],
             tools=[
                 {

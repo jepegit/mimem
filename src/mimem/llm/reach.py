@@ -44,6 +44,10 @@ class State(StrEnum):
     MISSING_KEY = "no key"
     NOT_INSTALLED = "missing"
     UNREACHABLE = "unreachable"
+    #: The key is valid and the account cannot pay. A distinct state because it is distinctly
+    #: fixable, and because "failed" sent the first real key this project ever saw to the same
+    #: place as a network error.
+    NO_CREDIT = "no credit"
     FAILED = "failed"
 
     @property
@@ -93,6 +97,21 @@ def port_open(url: str, timeout: float = PORT_TIMEOUT) -> bool:
         return False
 
 
+def _where(name: str) -> str:
+    """Say that a key is set, and where from -- never what it is.
+
+    "Set, and I cannot see it" is the confusing case this answers: a `.env` that was not being
+    read looked identical to no key at all, and the advice was to export a variable the user had
+    already written down.
+    """
+    from mimem import env as dotenv
+
+    source = dotenv.loaded_from()
+    if source is not None and name in dotenv.names_in():
+        return f"{name} from {source}"
+    return f"{name} is set"
+
+
 def _text_checks() -> Iterator[Check]:
     yield Check(
         group="text generation",
@@ -103,7 +122,7 @@ def _text_checks() -> Iterator[Check]:
     )
 
     if os.environ.get("ANTHROPIC_API_KEY"):
-        yield Check("text generation", "anthropic", State.CONFIGURED, "ANTHROPIC_API_KEY is set")
+        yield Check("text generation", "anthropic", State.CONFIGURED, _where("ANTHROPIC_API_KEY"))
     else:
         yield Check(
             "text generation",
@@ -114,7 +133,7 @@ def _text_checks() -> Iterator[Check]:
         )
 
     if os.environ.get("OPENAI_API_KEY"):
-        yield Check("text generation", "openai", State.CONFIGURED, "OPENAI_API_KEY is set")
+        yield Check("text generation", "openai", State.CONFIGURED, _where("OPENAI_API_KEY"))
     else:
         yield Check(
             "text generation", "openai", State.MISSING_KEY, "", "export OPENAI_API_KEY=sk-..."
@@ -193,12 +212,12 @@ def _speech_checks() -> Iterator[Check]:
         )
 
     if os.environ.get("OPENAI_API_KEY"):
-        yield Check("speech", "openai", State.CONFIGURED, "OPENAI_API_KEY is set")
+        yield Check("speech", "openai", State.CONFIGURED, _where("OPENAI_API_KEY"))
     else:
         yield Check("speech", "openai", State.MISSING_KEY, "", "export OPENAI_API_KEY=sk-...")
 
     if os.environ.get("ELEVENLABS_API_KEY"):
-        yield Check("speech", "elevenlabs", State.CONFIGURED, "ELEVENLABS_API_KEY is set")
+        yield Check("speech", "elevenlabs", State.CONFIGURED, _where("ELEVENLABS_API_KEY"))
     else:
         yield Check(
             "speech",
@@ -252,12 +271,38 @@ def probe(check: Check, *, model: str | None = None) -> Check:
     try:
         detail = _ping(check.name, model)
     except (LLMUnavailableError, LLMRefusedError) as exc:
-        return Check(
-            check.group, check.name, State.UNREACHABLE, _one_line(str(exc), 120), check.fix
-        )
+        return _from_failure(check, exc, State.UNREACHABLE)
     except Exception as exc:
-        return Check(check.group, check.name, State.FAILED, _one_line(str(exc), 120), check.fix)
+        return _from_failure(check, exc, State.FAILED)
     return Check(check.group, check.name, State.READY, detail, check.fix)
+
+
+#: Providers say "you have no money" in a 400 or a 402 with prose, not with a status anyone can
+#: switch on. Matching the prose is unlovely and it is the only thing available.
+_BILLING = re.compile(
+    r"credit balance|insufficient[_ ]quota|billing|payment required|exceeded your current quota",
+    re.IGNORECASE,
+)
+
+
+def _from_failure(check: Check, error: BaseException, fallback: State) -> Check:
+    """Classify a live probe's failure, rather than calling every one of them red.
+
+    The first real key this project ever saw came back "your credit balance is too low". The key
+    was **valid**; the request shape was accepted; the only thing wrong was money. Under a single
+    ``failed`` state that is indistinguishable from a network error or a broken adapter, and it
+    sends the user to look in entirely the wrong place.
+    """
+    message = _one_line(str(error), 160)
+    if _BILLING.search(message):
+        return Check(
+            check.group,
+            check.name,
+            State.NO_CREDIT,
+            "the key works; the account cannot pay for the request",
+            f"add credit for {check.name}, then re-run `mimem doctor --live`",
+        )
+    return Check(check.group, check.name, fallback, message, check.fix)
 
 
 def _ping(name: str, model: str | None) -> str:

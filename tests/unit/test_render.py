@@ -117,3 +117,37 @@ def test_the_cut_beats_are_listed_where_a_reader_will_find_them(
     enforce(interphase_script, budget=1.0)
     study = render_study(interphase_script)
     assert "Cut to fit the duration budget" in study
+
+
+def test_the_manifest_records_what_stage_six_did(interphase_script: Script) -> None:
+    """`mimem.elaborate` promised this in its own docstring for five milestones.
+
+    "Every task has a degradation path ... the manifest always says what happened." It did not:
+    the report was computed and dropped, and nothing noticed because with no model configured
+    there is nothing in it to miss. The first live run made it visible.
+    """
+    from mimem.elaborate import Absence
+    from mimem.elaborate.run import Degradation, ElaborationReport
+
+    report = ElaborationReport()
+    report.attempted["gloss"] = 2
+    report.succeeded["gloss"] = 1
+    report.degraded.append(
+        Degradation("gloss", "drift", "no key", "the source's own sentence", Absence.NOT_CONFIGURED)
+    )
+
+    manifest = json.loads(render_manifest(interphase_script, None, report))
+
+    section = manifest["elaboration"]
+    assert section["attempted"] == {"gloss": 2}
+    assert section["succeeded"] == {"gloss": 1}
+    assert section["degraded"][0]["kind"] == "not configured"
+    assert section["absences"] == {"not configured": 1}
+    assert "dollars" in section["cost"]
+
+
+def test_a_manifest_without_a_report_has_no_elaboration_section(
+    interphase_script: Script,
+) -> None:
+    """`replan` re-runs stages 7 to 9, so there is nothing new to record and it says nothing."""
+    assert "elaboration" not in json.loads(render_manifest(interphase_script))

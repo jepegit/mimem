@@ -813,6 +813,12 @@ def why_this(programme_id: str = "", beat_id: str = "") -> str:
 
 
 def main() -> None:
+    # The host starts this process with its own environment, which may not be the shell the
+    # user set a key in. A `.env` beside the workspace is often the only place it exists.
+    from mimem import env as dotenv
+
+    dotenv.load()
+
     """Run over stdio. Nothing may be written to stdout but the protocol itself."""
     sys.stdout.reconfigure(line_buffering=False)  # type: ignore[union-attr]
     mcp.run(transport="stdio")

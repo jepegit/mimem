@@ -7,6 +7,9 @@ report is unhelpful there it is unhelpful where it is needed most.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
 
@@ -162,3 +165,100 @@ def test_probe_leaves_the_assistant_alone(bare: None) -> None:
 
     check = _named(survey(), "text generation", "assistant")
     assert reach.probe(check) == check
+
+
+# -- .env, and the failures that are not failures ---------------------------------------------
+
+
+def test_a_key_from_a_dotenv_says_where_it_came_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ "Set, and I cannot see it" was the confusing case: a .env that was never read looked
+    exactly like no key at all, and doctor told the user to export what they had already
+    written down."""
+    from mimem import env as dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("ANTHROPIC_API_KEY=secret-value\n", encoding="utf-8")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(dotenv, "_searched", False)
+    monkeypatch.setattr(dotenv, "_source", None)
+
+    assert dotenv.load(tmp_path) == env_file
+    assert os.environ["ANTHROPIC_API_KEY"] == "secret-value"
+
+    detail = _named(survey(), "text generation", "anthropic").detail
+    assert str(env_file) in detail
+    assert "secret-value" not in detail, "doctor must never print the key"
+
+
+def test_the_shell_beats_the_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file edited last month must not override what you exported in this shell."""
+    from mimem import env as dotenv
+
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=from-file\n", encoding="utf-8")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "from-shell")
+    monkeypatch.setattr(dotenv, "_searched", False)
+    monkeypatch.setattr(dotenv, "_source", None)
+
+    dotenv.load(tmp_path)
+    assert os.environ["ANTHROPIC_API_KEY"] == "from-shell"
+
+
+def test_only_known_names_are_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mimem import env as dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "ANTHROPIC_API_KEY=a\nSOME_PRIVATE_THING=b\nexport OPENAI_API_KEY=c\n", encoding="utf-8"
+    )
+    assert dotenv.names_in(env_file) == ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+
+
+def test_no_dotenv_is_not_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mimem import env as dotenv
+
+    monkeypatch.setattr(dotenv, "_searched", False)
+    monkeypatch.setattr(dotenv, "_source", None)
+    assert dotenv.load(tmp_path) is None
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Error code: 400 - {'message': 'Your credit balance is too low'}",
+        "insufficient_quota: you exceeded your current quota",
+        "402 Payment Required",
+    ],
+)
+def test_an_unpaid_account_is_not_reported_as_a_broken_one(
+    message: str, configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The first real key this project saw was valid, accepted, and out of credit.
+
+    Under one `failed` state that reads the same as a network error or a broken adapter, and
+    sends the user to look in entirely the wrong place.
+    """
+    import mimem.llm.reach as reach
+
+    def broke(name: str, model: str | None) -> str:
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(reach, "_ping", broke)
+    checked = reach.probe(_named(survey(), "text generation", "anthropic"))
+
+    assert checked.state is State.NO_CREDIT
+    assert "the key works" in checked.detail
+    assert "add credit" in checked.fix
+
+
+def test_a_genuine_failure_is_still_a_failure(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import mimem.llm.reach as reach
+
+    def broke(name: str, model: str | None) -> str:
+        raise RuntimeError("connection reset by peer")
+
+    monkeypatch.setattr(reach, "_ping", broke)
+    assert reach.probe(_named(survey(), "text generation", "anthropic")).state is State.FAILED

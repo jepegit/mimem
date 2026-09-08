@@ -343,6 +343,27 @@ The lesson generalises past this section and is worth keeping in view for everyt
 **a metric that is quiet on correct input tells you nothing about coverage.** `gloss_coverage`
 was a real failure found the same way; this one looked identical and was not.
 
+### The critic pass, run once, by hand
+
+Done on 2026-09-08, before building any of the machinery, because this plan says to cut M11 if
+the pass produces nothing. It produced two rules, so it does not get cut.
+
+The method was the whole of it: build a programme, read `audio.md` and the script, and ask what
+is wrong that no rule catches. Four candidates came out, and **one of the four was wrong**, which
+is the part worth keeping. Sixteen answer beats carried ten distinct texts, and the obvious
+reading -- the listener is told the same thing repeatedly -- was false: every repeat was one body
+ask and one review ask of the same card, which is what `STR-07` requires. A rule written on that
+reading would have fired on correct output for ever.
+
+What survived the check became `RET-06` (distinct *cards* sharing one answer sentence: ten cards,
+seven sentences, one sentence answering three questions) and `STR-09` (recaps reading "That was
+methods." and transitions reading "More on drift coefficient."). Together they report fourteen
+warnings on the corpus, none of which anything could see before.
+
+**Both are known-firing, and that is tracked rather than hidden.** `KNOWN_FINDINGS` in the script
+lint tests asserts each still fires on the clean plan, so the day the planner is fixed the entry
+fails and has to be removed. A skip would have rotted silently.
+
 ### Rule mining as its own product
 
 The critic pass has value even when no rule comes out of it. Running a model over ten programmes

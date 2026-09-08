@@ -685,6 +685,78 @@ def speak(
     _print_synthesis(result)
 
 
+@app.command("rules")
+def list_rules(
+    unregistered: Annotated[
+        bool, typer.Option("--check", help="exit non-zero if a rule exists but never runs")
+    ] = False,
+) -> None:
+    """Every rule the linter runs, and whether anything would notice it breaking.
+
+    A rule that is defined and not registered is a rule that does not exist, and the suite
+    cannot tell you that: enumerating classes and enumerating the registry are different
+    questions. Two rules were written, given triggers, covered by tests and never ran before
+    this existed.
+
+    ``--check`` is the CI-shaped form. To ask the harder question -- whether a *test* would fail
+    if a rule silently stopped working -- run ``tools/mutate_rules.py``, which takes minutes
+    because it answers it by breaking each rule in turn.
+    """
+    from mimem.lint.artefact_rules import ArtefactRule, artefact_rules
+    from mimem.lint.rules import DEFAULT_RULES, LintRule
+    from mimem.lint.script_rules import ScriptRule, script_rules
+
+    groups: list[tuple[str, tuple[LintRule | ScriptRule | ArtefactRule, ...]]] = [
+        ("text", DEFAULT_RULES),
+        ("script", script_rules()),
+        ("artefact", artefact_rules()),
+    ]
+    table = Table("rule", "reads", "severity", "checks")
+    registered: set[str] = set()
+    for label, rules in groups:
+        for rule in rules:
+            registered.add(rule.id)
+            table.add_row(rule.id, label, rule.severity.value, rule.description)
+    console.print(table)
+    console.print(f"{len(registered)} rules registered", style="dim")
+
+    defined = _defined_rule_ids()
+    orphans = sorted(defined - registered)
+    if orphans:
+        console.print(
+            f"\n[bold red]defined but never run:[/] {', '.join(orphans)}\n"
+            "  add them to the registry at the end of their module",
+        )
+        if unregistered:
+            raise typer.Exit(code=1)
+
+
+def _defined_rule_ids() -> set[str]:
+    """Every concrete rule class, by reflection rather than by the list the linter reads."""
+    import importlib
+    import inspect
+
+    found: set[str] = set()
+    for module_name, base_name in (
+        ("mimem.lint.rules", "LintRule"),
+        ("mimem.lint.script_rules", "ScriptRule"),
+        ("mimem.lint.artefact_rules", "ArtefactRule"),
+    ):
+        # importlib, because the package __init__ exports functions that shadow these names.
+        module = importlib.import_module(module_name)
+        base = getattr(module, base_name)
+        for _, obj in inspect.getmembers(module, inspect.isclass):
+            rule_id = getattr(obj, "id", None)
+            if (
+                issubclass(obj, base)
+                and obj is not base
+                and not inspect.isabstract(obj)
+                and rule_id
+            ):
+                found.add(str(rule_id))
+    return found
+
+
 @app.command("compare")
 def compare_paths(
     source: Annotated[Path, typer.Argument(help="the document to build twice")],

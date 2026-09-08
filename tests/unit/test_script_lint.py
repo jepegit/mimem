@@ -294,6 +294,28 @@ def _figure_without_its_kind(script: Script) -> None:
     )
 
 
+def _answer_two_questions_with_one_sentence(script: Script) -> None:
+    """RET-06: a second card whose answer sentence is the first one's.
+
+    Real: one build answered questions about "reference resonator", "resonant strain sensor" and
+    "resonant strain" with a single sentence.
+    """
+    first = script.cards[0]
+    twin = first.model_copy(deep=True)
+    twin.id = first.id + "_twin"
+    twin.subject = first.subject + " again"
+    twin.prompt = "And what about it the second time?"
+    script.cards.append(twin)
+
+
+def _empty_the_recaps(script: Script) -> None:
+    """STR-09: a recap that names its section and says nothing else."""
+    for section in script.sections:
+        for beat in section.beats():
+            if beat.type is BeatType.RECAP:
+                beat.text = f"That was {section.title.lower()}."
+
+
 CASES: list[tuple[str, Mutator]] = [
     ("STR-02", _break_prequestions),
     ("STR-06", _remove_recaps),
@@ -314,6 +336,8 @@ CASES: list[tuple[str, Mutator]] = [
     ("SENT-02", _open_with_a_pronoun),
     ("TBL-02", _table_leads_with_a_value),
     ("FIG-01", _figure_without_its_kind),
+    ("RET-06", _answer_two_questions_with_one_sentence),
+    ("STR-09", _empty_the_recaps),
 ]
 IDS = [case[0] for case in CASES]
 
@@ -325,6 +349,19 @@ IDS = [case[0] for case in CASES]
 PREPARE: dict[str, Mutator] = {"TBL-02": _add_a_table, "FIG-01": _add_a_figure}
 
 
+#: Rules that fire on the *clean* plan today, and why that is a finding rather than a bug in the
+#: rule. Both came from a critic pass -- reading a finished programme and asking what was wrong
+#: with it that no rule caught -- so of course the planner still produces what they describe.
+#:
+#: This exists so that "known defect" is tracked rather than hidden. The clean-plan test asserts
+#: these rules *do* fire, so the day the planner is fixed the entry fails and has to be removed.
+#: A skip would have rotted silently.
+KNOWN_FINDINGS: dict[str, str] = {
+    "RET-06": "distinct cards still share a supporting sentence; see docs/PLAN-ai.md",
+    "STR-09": "recaps read 'That was methods.' and transitions read 'More on X.'",
+}
+
+
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)
 def test_the_clean_plan_passes(
     rule_id: str, mutate: Mutator, elaborated_script: Script, study_profile: Profile
@@ -332,7 +369,15 @@ def test_the_clean_plan_passes(
     clean = elaborated_script.model_copy(deep=True)
     if prepare := PREPARE.get(rule_id):
         prepare(clean)
-    assert _fired(_rule(rule_id, study_profile), clean) == []
+    fired = _fired(_rule(rule_id, study_profile), clean)
+
+    if rule_id in KNOWN_FINDINGS:
+        assert fired, (
+            f"{rule_id} no longer fires on the clean plan. If the planner was fixed, remove it "
+            f"from KNOWN_FINDINGS -- it was there because: {KNOWN_FINDINGS[rule_id]}"
+        )
+        return
+    assert fired == []
 
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)

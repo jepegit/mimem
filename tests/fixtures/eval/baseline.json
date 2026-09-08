@@ -3,8 +3,8 @@
     {
       "document": "synthetic-paper.pdf",
       "lint_errors": 0,
-      "lint_warnings": 4,
-      "rules_checked": 30,
+      "lint_warnings": 8,
+      "rules_checked": 32,
       "rules_skipped": 0,
       "minutes": 7.65,
       "budget_minutes": 10.0,
@@ -26,8 +26,8 @@
     {
       "document": "synthetic-sensor-paper.md",
       "lint_errors": 0,
-      "lint_warnings": 25,
-      "rules_checked": 30,
+      "lint_warnings": 39,
+      "rules_checked": 32,
       "rules_skipped": 0,
       "minutes": 19.25,
       "budget_minutes": 19.29,

@@ -16,8 +16,10 @@ the suite being unprotected. It was not. Twenty-nine of thirty were caught. Sile
 input says nothing about whether a test would catch the rule breaking, and the two questions are
 easy to confuse.
 
-Source files are restored after every iteration, including on failure. If you interrupt it, run
-``git status`` -- a killed process can leave one rule gutted.
+Source files are snapshotted before the run and restored after every iteration, including on
+failure -- *not* with ``git checkout``, which would throw away uncommitted work in them and did
+exactly that once. If you interrupt it, run ``git status``: a killed process can still leave one
+rule gutted.
 """
 
 from __future__ import annotations
@@ -58,7 +60,7 @@ def rules() -> list[tuple[str, str, str]]:
                 and not inspect.isabstract(obj)
                 and getattr(obj, "id", None)
             ):
-                found.append((obj.id, obj.__name__, path_name))
+                found.append((str(obj.id), obj.__name__, path_name))
     return sorted(found)
 
 
@@ -73,8 +75,23 @@ def gut(path_name: str, class_name: str) -> None:
     path.write_text(text[:at] + match.group(1) + "    " + MUTANT + text[at:], encoding="utf-8")
 
 
-def restore() -> None:
-    subprocess.run(["git", "checkout", "--", *SOURCES], check=True)
+def snapshot() -> dict[str, str]:
+    """The files as they are now, so restoring cannot mean "as they are in git"."""
+    return {name: pathlib.Path(name).read_text(encoding="utf-8") for name in SOURCES}
+
+
+def restore(saved: dict[str, str]) -> None:
+    """Put back exactly what was there.
+
+    This used to be ``git checkout -- <files>``, which restored the *committed* version and so
+    silently deleted any uncommitted work in them. It did precisely that to two new rules, half
+    an hour after this tool was written, while they were being developed -- which is when you
+    would most want to run it. Snapshotting the text costs nothing and cannot do that.
+    """
+    for name, text in saved.items():
+        path = pathlib.Path(name)
+        if path.read_text(encoding="utf-8") != text:
+            path.write_text(text, encoding="utf-8")
 
 
 def main() -> int:
@@ -93,6 +110,7 @@ def main() -> int:
         raise SystemExit(f"no rule matching {args.only!r}")
 
     unprotected: list[str] = []
+    saved = snapshot()
     for index, (rule_id, class_name, path_name) in enumerate(targets, start=1):
         gut(path_name, class_name)
         try:
@@ -103,7 +121,7 @@ def main() -> int:
                 text=True,
             )
         finally:
-            restore()
+            restore(saved)
         caught = result.returncode != 0
         if not caught:
             unprotected.append(rule_id)

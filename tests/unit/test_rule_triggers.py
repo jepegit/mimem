@@ -382,6 +382,32 @@ SCRIPT_TRIGGERS: dict[str, Callable[[], Script]] = {
             ]
         ]
     ),
+    # Two questions answered by the same sentence. Not the review block re-asking, which is
+    # what STR-07 wants: these are two distinct cards.
+    "RET-06": lambda: _script(
+        segments=[[_beat("e1")]],
+        cards=[
+            Card(
+                id="card1",
+                subject="reference resonator",
+                prompt="What did they report for the reference resonator?",
+                answer="Here's the answer about reference resonator. It cuts drift by most of it.",
+            ),
+            Card(
+                id="card2",
+                subject="resonant strain sensor",
+                prompt="What did they report for the resonant strain sensor?",
+                answer=(
+                    "Here's the answer about resonant strain sensor. It cuts drift by most of it."
+                ),
+            ),
+        ],
+    ),
+    # A recap that names its section and says nothing else.
+    "STR-09": lambda: _script(
+        segments=[[_beat("r1", BeatType.RECAP, "That was methods.", generated=True, spans=[])]],
+        title="Methods",
+    ),
 }
 
 ARTEFACT_TRIGGERS: dict[str, Callable[[], Bundle]] = {
@@ -511,5 +537,28 @@ def test_every_trigger_fires(rule_class: type) -> None:
 
 
 def test_the_rule_count_is_what_the_docs_claim() -> None:
-    """The README says thirty; if that changes, the sentence changes with it."""
-    assert len(_rule_classes()) == 30
+    """The README says the count; if that changes, the sentence changes with it."""
+    assert len(_rule_classes()) == 32
+
+
+def test_every_rule_is_registered() -> None:
+    """A rule the linter never calls is a rule that does not exist.
+
+    The gap this closes was found by falling into it. Two rules were written, given triggers
+    above, and covered by `test_every_trigger_fires` -- and never ran, because the linter calls
+    a hand-maintained tuple and that tuple sat *above* the classes in the file. Every test here
+    passed. `mimem build` checked thirty rules and reported thirty.
+
+    Enumerating classes and enumerating the registry are different questions, and the first one
+    reassured me about the second. It is the same drift as the extension manifest listing ten
+    tools while the server answered eleven.
+    """
+    from mimem.lint.artefact_rules import artefact_rules
+    from mimem.lint.rules import DEFAULT_RULES
+    from mimem.lint.script_rules import script_rules
+
+    registered = {
+        rule.id for group in (DEFAULT_RULES, script_rules(), artefact_rules()) for rule in group
+    }
+    defined = {cls.id for cls in _rule_classes()}
+    assert defined == registered, f"defined but never run: {sorted(defined - registered)}"

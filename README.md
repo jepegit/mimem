@@ -186,12 +186,17 @@ Part 1 — document in, audio out — is built. Part 2 — playback and review a
 | ✅ **M5** | The optional elaboration layer, and the grounding gate that makes it trustable. |
 | ✅ **M6** | The complete lint suite, and an evaluation harness — the first time any of this gets *measured* rather than argued from the literature. |
 | ✅ **M7** | The hand-off to a speech engine. `mimem build paper.pdf --speak sapi` ends in a WAV you can play. |
+| ✅ **M8** | Reach: one adapter for every OpenAI-shaped server, hosted or local, and `mimem doctor` to say what your machine can actually get to. |
 
 Two things you should know before trusting it. The **live API adapter has never been run** (there
 was no key in the environment it was written in). And the evaluation that now exists is the
 mechanical layer only — it measures whether the output still has the properties the design asks
 for, *not* whether anyone learned anything; the layers that would answer that need a model and
 then people. Both are written down in [the plan](docs/PLAN-part1.md).
+
+`mimem doctor` will tell you which of those paths your machine can currently take, and
+[Using a model](https://jepegit.github.io/mimem/ai/) explains each one — including everything
+that works with no key at all, which is most of it.
 
 A third, smaller one: the **corpus is one document**. That is enough to catch a verbalizer
 regression and not enough to measure spacing, which is why the harness now records how many

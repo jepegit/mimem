@@ -41,6 +41,9 @@ OPERATORS = {
     "√": " the square root of ", "°": " degrees ", "%": " percent ",
     "+": " plus ", "&": " and ", "@": " at ",
     "−": " minus ", "‰": " per mille ", "′": " prime ", "″": " double prime ",
+    # U+2044, which a typesetter uses for a real fraction: one-quarter written that way
+    # is "one over four", and a corpus of twelve papers had ten of them.
+    "⁄": " over ",
 }  # fmt: skip
 
 #: Characters that carry no spoken content at all -- page furniture, footnote markers, marks
@@ -49,7 +52,14 @@ OPERATORS = {
 #: time this runs every *matched* pair has been rewritten, so what is left is an opening bracket
 #: whose partner was lost to a column break. Stray diacritics are extraction damage -- "Bo¨ rner"
 #: for "Börner" -- degraded either way, but at least speakable.
-DROP_CHARS = '§¶†‡•▪◦※★☆©®™|¦^_`{}[]()<>\\/*#$€£¥"¨˜´'
+#:
+#: The second row is what a twelve-paper corpus added: the black square that prefixes every
+#: heading in an ACS PDF, the asterisk-operator, parallel-to and up-tack characters used as
+#: affiliation and footnote markers against an author's name, and the up and down arrows that
+#: mark gas and precipitate in a chemical equation -- which the equation handler has already
+#: reduced to prose by the time they are seen. None of them is ever said, and together they
+#: were 64 of 140 ``TTS-01`` failures across the corpus.
+DROP_CHARS = '§¶†‡•▪◦※★☆©®™|¦^_`{}[]()<>\\/*#$€£¥"¨˜´■□▲▼◆●∗∥‖⊥↑↓'
 
 #: Subscripted and superscripted symbols, written the way a source that kept its markup writes
 #: them: ``f_0``, ``C_rate``, ``x^2``. Dropping the marker leaves the index stranded as a bare
@@ -99,6 +109,34 @@ def apply_lexicon(text: str, lexicon: dict[str, str]) -> str:
     return text
 
 
+#: A combining mark that a PDF extractor has put *before* the letter it belongs to, usually
+#: with a space in between. Every diacritic in a twelve-paper corpus arrived this way.
+_ORPHAN_MARK = re.compile(r"(\s)([̀-ͯ])(\S)")
+
+#: Marks that survive the repair below because their base was not a letter at all -- a macron
+#: over a crystallographic index, say, whose digit the number verbalizer has already turned into
+#: a word. Nothing can compose those, and a bare accent is unspeakable (rule TTS-01).
+_COMBINING = re.compile(r"[̀-ͯ]")
+
+
+def repair_diacritics(text: str) -> str:
+    """Put a stray accent back on the letter it came off, then drop what cannot be repaired.
+
+    PDF text extraction routinely emits a diacritic *ahead* of its base letter and separated by
+    a space: ``Hj ̈orvarsson`` for Hjörvarsson, ``nine point nine zero ̊A`` for 9.90 Å, ``R ̄three
+    c`` for the space group R3̄c. Across twelve papers this was 76 of 140 unspeakable characters
+    -- the largest single cause of ``TTS-01`` failures, and in every case the mark was one
+    position early.
+
+    Swapping the mark with the character after it and recomposing recovers the real word:
+    ``Å`` becomes an angstrom the unit lexicon can say, and a Scandinavian surname stops being
+    two words. What still cannot compose -- a macron whose base was a digit that has since
+    become a word -- is stripped, because an unattached accent has no sound.
+    """
+    repaired = _ORPHAN_MARK.sub(lambda m: f"{m.group(1)}{m.group(3)}{m.group(2)}", text)
+    return _COMBINING.sub("", unicodedata.normalize("NFC", repaired))
+
+
 def normalize(text: str) -> str:
     """Fold compatibility look-alikes onto the code points the rest of the pipeline expects.
 
@@ -112,7 +150,7 @@ def normalize(text: str) -> str:
 
     Idempotent, so calling it again inside a later stage costs nothing.
     """
-    return unicodedata.normalize("NFKC", text)
+    return repair_diacritics(unicodedata.normalize("NFKC", text))
 
 
 def verbalize_indices(text: str) -> str:

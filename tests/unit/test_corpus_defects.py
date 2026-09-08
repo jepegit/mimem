@@ -195,3 +195,75 @@ def test_real_prose_and_short_headings_survive(prose: str) -> None:
     from mimem.triage.rules import reads_as_prose
 
     assert reads_as_prose(prose)
+
+
+def test_the_same_font_maps_the_en_dash_onto_a_letter() -> None:
+    """`2.7e4.2 V` is a voltage range, not scientific notation."""
+    from mimem.clean.extraction import repair_dash_as_e
+    from mimem.ir import Block, BlockKind, BlockRole, Document, SourceMeta
+
+    thorn = chr(0x00FE)
+    doc = Document(
+        id="d",
+        source=SourceMeta(format="pdf"),
+        blocks=[
+            Block(
+                id="b1",
+                kind=BlockKind.PARAGRAPH,
+                role=BlockRole.BODY,
+                text=f"Li/Li{thorn} and Ni3{thorn} and Mn2{thorn}: window of 2.7e4.2 V, 50e70 nm",
+            )
+        ],
+    )
+    assert repair_dash_as_e(doc) == 2
+    assert "2.7 to 4.2 V" in doc.blocks[0].text
+    assert "50 to 70 nm" in doc.blocks[0].text
+
+
+def test_a_document_with_a_sound_font_keeps_its_scientific_notation() -> None:
+    """`1.5e-9` must survive: rewriting an exponent would be worse than the bug being fixed."""
+    from mimem.clean.extraction import repair_dash_as_e
+    from mimem.ir import Block, BlockKind, BlockRole, Document, SourceMeta
+
+    doc = Document(
+        id="d",
+        source=SourceMeta(format="pdf"),
+        blocks=[
+            Block(
+                id="b1",
+                kind=BlockKind.PARAGRAPH,
+                role=BlockRole.BODY,
+                text="a diffusivity of 1.5e-9 and a window of 2.7e4.2 V",
+            )
+        ],
+    )
+    assert repair_dash_as_e(doc) == 0
+    assert "1.5e-9" in doc.blocks[0].text
+
+
+def test_the_second_repair_still_knows_after_the_first_erased_the_evidence() -> None:
+    """Recognising this font destroys what identifies it, and the repairs run far apart.
+
+    The character swap happens early; the range repair has to wait until paragraph merging,
+    because a range split across a column break is two fragments until then. Re-detecting at
+    that point finds a clean document -- so the first repair leaves a diagnostic behind.
+    """
+    from mimem.clean.extraction import has_broken_math_font, repair_math_font
+    from mimem.ir import Block, BlockKind, BlockRole, Document, SourceMeta
+
+    thorn = chr(0x00FE)
+    doc = Document(
+        id="d",
+        source=SourceMeta(format="pdf"),
+        blocks=[
+            Block(
+                id="b1",
+                kind=BlockKind.PARAGRAPH,
+                role=BlockRole.BODY,
+                text=f"Li/Li{thorn} and Ni3{thorn} and Mn2{thorn} were measured",
+            )
+        ],
+    )
+    assert repair_math_font(doc) > 0
+    assert thorn not in doc.blocks[0].text, "the evidence is gone"
+    assert has_broken_math_font(doc), "and the document still knows"

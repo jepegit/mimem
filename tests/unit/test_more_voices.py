@@ -234,7 +234,15 @@ def test_the_mp3_is_much_smaller(tmp_path: Path) -> None:
     assert to_mp3(wav).stat().st_size < wav.stat().st_size / 2
 
 
+@needs_ffmpeg
 def test_a_missing_input_is_an_error(tmp_path: Path) -> None:
+    """Needs ffmpeg, which is the point of the marker rather than an inconvenience.
+
+    `to_mp3` checks availability *before* the input, because "this machine cannot make MP3s at
+    all" is more useful than "that file is missing". So without ffmpeg this raises the other
+    error and the test is meaningless -- which is exactly what CI reported, on a machine where
+    ffmpeg is absent and mine where it is not.
+    """
     with pytest.raises(ConversionError, match="does not exist"):
         to_mp3(tmp_path / "nope.wav")
 
@@ -250,9 +258,8 @@ def test_without_ffmpeg_it_says_the_wav_is_written_anyway(
         to_mp3(wav)
 
 
+@needs_ffmpeg
 def test_a_wav_that_is_not_a_wav_fails_rather_than_writing_rubbish(tmp_path: Path) -> None:
-    if not shutil.which("ffmpeg"):
-        pytest.skip("ffmpeg is not installed")
     bad = tmp_path / "bad.wav"
     bad.write_bytes(b"this is not audio")
     with pytest.raises(ConversionError, match="ffmpeg failed"):

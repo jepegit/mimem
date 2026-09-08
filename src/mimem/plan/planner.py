@@ -354,9 +354,7 @@ def _card_pool(ctx: _Context, groups: list[tuple[Block | None, list[Block]]]) ->
             ctx.support.spend(support)
             used.add(concept.id)
             spoken_answers.add(support.spoken)
-            cards.append(
-                make.make_card(concept, support, _section_id(heading), ctx.profile, ctx.listener)
-            )
+            cards.append(make.make_card(concept, support, _section_id(heading), ctx.factory))
             continue
 
         # No concept here at all -- a short section, or a document whose vocabulary never
@@ -370,11 +368,7 @@ def _card_pool(ctx: _Context, groups: list[tuple[Block | None, list[Block]]]) ->
         if topic is not None:
             cards.append(
                 make.topic_card(
-                    _section_title(heading, blocks),
-                    topic,
-                    _section_id(heading),
-                    ctx.profile,
-                    ctx.listener,
+                    _section_title(heading, blocks), topic, _section_id(heading), ctx.factory
                 )
             )
     return cards
@@ -728,9 +722,7 @@ def _add_segment_prompts(ctx: _Context, script: Script) -> None:
                 support = ctx.support.take(concept_id)
                 if support is None:
                     continue
-                card = make.make_card(
-                    concept, support, segment.section_id, ctx.profile, ctx.listener
-                )
+                card = make.make_card(concept, support, segment.section_id, ctx.factory)
                 beats = make.prompt_beats(ctx.factory, card)
                 cost = sum(b.total_seconds for b in beats)
                 if running + cost > budget:

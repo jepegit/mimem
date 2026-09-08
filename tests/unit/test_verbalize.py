@@ -281,3 +281,51 @@ def test_a_unit_with_no_number_in_front_is_still_spoken() -> None:
 
 def test_plural_cross_references_are_dropped() -> None:
     assert "S2" not in verbalize_citations("In Tables S2 and S3, the composition is given")
+
+
+# -- a compound unit written with nothing between its factors -----------------------------------
+#
+# Journals set "mAh g-1" with a thin space, and the space does not survive extraction. One
+# corpus paper reports every capacity it measures as "3867.3 mAhg-1" -- twelve of its thirteen
+# lint errors, and twelve stray "one"s in the audio.
+
+
+@pytest.mark.parametrize(
+    ("symbol", "spoken"),
+    [
+        ("mAhg-1", "milliamp hours per gram"),
+        ("mAg-1", "milliamps per gram"),
+        ("mAcm-2", "milliamps per square centimetre"),
+        ("Wkg-1", "watts per kilogram"),
+        ("Whkg-1", "watt hours per kilogram"),
+        ("gcm-3", "grams per cubic centimetre"),
+    ],
+)
+def test_a_welded_compound_unit_is_read_as_a_ratio(symbol: str, spoken: str) -> None:
+    assert spoken_unit(symbol) == spoken
+
+
+def test_the_longest_head_wins() -> None:
+    """ "mAhg" split at the first cut that worked gives "milliamps per hectogram".
+
+    Which is the worst kind of wrong answer: it is a real unit, said fluently, and nothing
+    downstream can tell it is not what the paper measured.
+    """
+    assert spoken_unit("mAhg-1") == "milliamp hours per gram"
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    [
+        # A negative exponent is what marks the token as a ratio. Without one it is ambiguous.
+        "mAhg",
+        # A unit that resolves whole is never taken apart: "mAh" is not milliamps times hours.
+        "mAh",
+        # And a designation is not a unit at all.
+        "NMC811",
+        "H2O",
+    ],
+)
+def test_what_is_not_a_welded_ratio(symbol: str) -> None:
+    assert spoken_unit(symbol) != "milliamps per hectogram"
+    assert spoken_unit(symbol) is None or " per " not in spoken_unit(symbol)

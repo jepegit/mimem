@@ -678,8 +678,7 @@ def topic_card(
     title: str,
     support: Support,
     section_id: str | None,
-    profile: Profile,
-    listener: Listener | None = None,
+    factory: BeatFactory,
 ) -> Card:
     """A closing question for a section the extractor found no concept in (rule STR-06).
 
@@ -692,9 +691,8 @@ def topic_card(
         id="k_" + beat_id(BeatType.PROMPT, question, support.span.block_id)[2:],
         concept_id=None,
         subject=subject,
-        prompt=verbalize_text(question, profile, listener).strip(),
-        answer=verbalize_text(f"Here's the answer about {subject}.", profile, listener).strip()
-        + f" {support.spoken}",
+        prompt=factory.speak(question),
+        answer=factory.speak(f"Here's the answer about {subject}.") + f" {support.spoken}",
         prompt_type=PromptType.RECALL,
         section_id=section_id,
         spans=[support.span],
@@ -705,8 +703,7 @@ def make_card(
     concept: Concept,
     support: Support,
     section_id: str | None,
-    profile: Profile,
-    listener: Listener | None = None,
+    factory: BeatFactory,
 ) -> Card:
     """Build a response-congruent prompt and its answer (rules RET-02, RET-04, RET-05).
 
@@ -729,17 +726,14 @@ def make_card(
         prompt_type = PromptType.RECALL
         question = f"What did the paper say about {term}?"
 
-    answer = (
-        verbalize_text(f"Here's the answer about {term}.", profile, listener).strip()
-        + f" {support.spoken}"
-    )
+    answer = factory.speak(f"Here's the answer about {term}.") + f" {support.spoken}"
     return Card(
         # Salted with the supporting span: two sections may legitimately ask about one concept,
         # and two cards with the same id would collide in cards.json and in the review block.
         id="k_" + beat_id(BeatType.PROMPT, question, f"{term}:{support.span.block_id}")[2:],
         concept_id=concept.id,
         subject=term,
-        prompt=verbalize_text(question, profile, listener).strip(),
+        prompt=factory.speak(question),
         answer=answer,
         prompt_type=prompt_type,
         difficulty=concept.difficulty,
@@ -798,6 +792,4 @@ def section_fallback_transition(factory: BeatFactory, section_title: str) -> str
     boundary that never had one read identically -- a listener should not be able to hear which
     happened.
     """
-    return verbalize_text(
-        f"Still on {_spoken_title(section_title)}.", factory.profile, factory.listener
-    ).strip()
+    return factory.speak(f"Still on {_spoken_title(section_title)}.")

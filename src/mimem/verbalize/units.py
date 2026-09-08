@@ -148,8 +148,9 @@ def _split_exponent(symbol: str) -> tuple[str, int]:
     if abs(exponent) > MAX_UNIT_EXPONENT:
         return symbol, 1
     # A trailing digit is only an exponent if the stem is a unit we recognise; otherwise it is
-    # part of a name ("NMC811", "H2O") and must not be pulled apart.
-    if _lookup(stem) is None:
+    # part of a name ("NMC811", "H2O") and must not be pulled apart. A stem that is two units
+    # welded together counts as recognised, but only with a negative exponent -- see _welded.
+    if _lookup(stem) is None and not (exponent < 0 and _welded(stem) is not None):
         return symbol, 1
     # ...and, for a positive exponent, only if the unit is one that has an area or a volume.
     # "H2" is hydrogen far more often than it is square henries.
@@ -179,11 +180,33 @@ def _lookup(symbol: str) -> tuple[str, str] | None:
     return None
 
 
+def _welded(symbol: str) -> tuple[str, str] | None:
+    """``mAhg`` -> ``("mAh", "g")``: two units written with nothing between them.
+
+    Journals set "mAh g-1" with a thin space, and the space does not survive extraction: one
+    corpus paper reports every capacity it measures as "3867.3 mAhg-1", which is twelve of its
+    thirteen lint errors and, spoken, twelve stray "one"s.
+
+    Only consulted when the whole symbol fails to resolve, so "mAh" is never taken apart into
+    milliamps and hours. The caller additionally requires a *negative* exponent, because that is
+    what marks the token as a ratio -- a bare "mAhg" is ambiguous and stays as it is.
+    """
+    # Longest head first, so "mAhg" is milliamp hours per gram and not milliamps per hectogram
+    # -- which is what the first cut that happened to work gave, and it is a plausible-sounding
+    # wrong answer, the worst kind. And down to a single character, because "Wkg-1" and "gcm-3"
+    # both start with a one-letter unit.
+    for cut in range(len(symbol) - 1, 0, -1):
+        head, tail = symbol[:cut], symbol[cut:]
+        if _lookup(head) is not None and _lookup(tail) is not None:
+            return head, tail
+    return None
+
+
 def _factor_words(symbol: str, plural: bool) -> str | None:
     stem, exponent = _split_exponent(symbol)
     entry = _lookup(stem)
     if entry is None:
-        return None
+        return _welded_words(stem, exponent, plural)
     word = entry[1] if plural else entry[0]
     if exponent == 1:
         return word
@@ -193,6 +216,23 @@ def _factor_words(symbol: str, plural: bool) -> str | None:
         inverse = _factor_words(f"{stem}{-exponent}" if -exponent > 1 else stem, plural=False)
         return f"per {inverse}" if inverse else None
     return f"{word} to the power {exponent}"
+
+
+def _welded_words(stem: str, exponent: int, plural: bool) -> str | None:
+    """``mAhg`` with exponent -1 -> "milliamp hours per gram"."""
+    welded = _welded(stem) if exponent < 0 else None
+    if welded is None:
+        return None
+    head, tail = welded
+    numerator = _factor_words(head, plural=plural)
+    denominator = _factor_words(tail, plural=False)
+    if numerator is None or denominator is None:
+        return None
+    if -exponent in _EXPONENT_WORDS:
+        denominator = f"{_EXPONENT_WORDS[-exponent]} {denominator}"
+    elif exponent != -1:
+        return None
+    return f"{numerator} per {denominator}"
 
 
 #: Single capitals that are units in a table and variables in a sentence. Bare, they are left

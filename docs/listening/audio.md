@@ -26,7 +26,8 @@ uv run mimem speak out/paper --engine sapi --voice "Microsoft Zira Desktop"
 | `silent` | nothing | Seeing a programme's true length and shape before paying to voice it. The default. |
 | `sapi` | Windows | Hearing whether a programme *works*, free and offline. Not a nice voice. |
 | `piper` | a Piper install and a voice file | Listening properly, offline and free. |
-| `openai` | a URL, usually a key | Listening properly, at the best quality, for money. |
+| `openai` | a URL, usually a key | Listening properly, for money — or a local Kokoro. |
+| `elevenlabs` | a key | The best voices available. Bills per character. |
 
 List what a voice engine offers:
 
@@ -47,6 +48,58 @@ uv run mimem speak out/paper --engine openai --base-url http://localhost:8000/v1
     It produces correctly-shaped silence at a plausible speaking rate, so you can check the
     length, the structure and the timing map without a voice, a key or a network. If something
     is wrong with the *programme*, this is where you find out, in a second and for nothing.
+
+## ElevenLabs
+
+The best voices here, and the only engine that bills per character.
+
+```bash
+export ELEVENLABS_API_KEY=...
+uv run mimem voices --engine elevenlabs
+uv run mimem speak out/paper --engine elevenlabs --voice 21m00Tcm4TlvDq8ikWAM
+```
+
+`mimem voices` lists the voices on your account with their names and accents, because the ids
+are opaque strings and nobody chooses a voice by one.
+
+!!! tip "The chunk cache matters more here than anywhere"
+
+    Per-character billing means a re-run after fixing one sentence should cost one sentence.
+    It does: audio is cached by text plus voice, so ninety beats become one. Check the length
+    with `--engine silent` first, and listen to a section with `--engine sapi`, before spending
+    anything on the full programme.
+
+Two details worth knowing, because they are the reason this engine needed its own adapter rather
+than another branch. The API **will not send you a WAV** — the options are MP3, raw PCM and
+mu-law — so mimem asks for PCM and puts the header on itself. And the rate is 22.05 kHz by
+default, matching SAPI and Piper, so a programme half-rendered by one engine and half by another
+still joins.
+
+## Kokoro
+
+Strong open-weights voices, and it usually needs no new code: the common way to serve it
+([kokoro-fastapi](https://github.com/remsky/Kokoro-FastAPI)) speaks the OpenAI shape.
+
+```bash
+uv run mimem speak out/paper --engine openai --base-url http://localhost:8880/v1 --voice af_bella
+```
+
+*Untested here — no Kokoro server was available on the machine this was written on. If the port
+or the path differs on yours, please say so.*
+
+## Smaller files
+
+```bash
+uv run mimem speak out/paper --engine sapi --format mp3
+```
+
+A real run: **47.7 MB of WAV became 8.7 MB of MP3**, 82% smaller, for a nineteen-minute
+programme. Mono, 64 kbit/s, which is transparent for a single voice.
+
+The WAV is kept, always. It is what `timings.json` describes and what an incremental re-render
+reuses, so deleting it to save disk would trade bytes for the thing that makes a second run
+cheap. And MP3 is offered only when `ffmpeg` is on your PATH — if it is not, you get the WAV and
+a line saying why, not a failed run. `mimem doctor` reports which.
 
 ## What you get
 
@@ -102,8 +155,8 @@ numbers are in `timings.json`.
 
 ## Known limits
 
-- **Output is WAV only.** A 20-minute programme is around 50 MB. Adding MP3 would mean shelling
-    out to `ffmpeg`, which is a dependency and a platform matrix this project does not want.
+- **MP3 needs `ffmpeg`.** It is never required: WAV is always written, and `--format mp3` is
+    an extra step that is skipped with an explanation when `ffmpeg` is absent.
 - **`sapi` starts a PowerShell process per beat**, which costs about a second each: a 90-beat
     programme takes under two minutes to synthesise, and almost all of it is startup.
 - **`piper` will not download a voice for you.** A tool that quietly pulls hundreds of megabytes

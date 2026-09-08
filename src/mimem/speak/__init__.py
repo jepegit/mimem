@@ -12,6 +12,8 @@ from mimem.speak.assemble import AUDIO_FILE, TIMINGS_FILE, Synthesis, Timing, sy
 from mimem.speak.audio import AudioError, Clip, Format
 from mimem.speak.cache import CACHE_DIR, SpeechCache, key_for
 from mimem.speak.chunks import SpeechChunk, speech_chunks
+from mimem.speak.elevenlabs import ElevenLabsEngine
+from mimem.speak.encode import ConversionError, OutputFormat, to_mp3
 from mimem.speak.engine import (
     ENGINES,
     Engine,
@@ -32,11 +34,14 @@ __all__ = [
     "TIMINGS_FILE",
     "AudioError",
     "Clip",
+    "ConversionError",
+    "ElevenLabsEngine",
     "Engine",
     "EngineError",
     "EngineOptions",
     "Format",
     "OpenAICompatibleEngine",
+    "OutputFormat",
     "PiperEngine",
     "SapiEngine",
     "SilentEngine",
@@ -49,4 +54,5 @@ __all__ = [
     "key_for",
     "speech_chunks",
     "synthesize",
+    "to_mp3",
 ]

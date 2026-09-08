@@ -197,12 +197,31 @@ def _speech_checks() -> Iterator[Check]:
     else:
         yield Check("speech", "openai", State.MISSING_KEY, "", "export OPENAI_API_KEY=sk-...")
 
+    if os.environ.get("ELEVENLABS_API_KEY"):
+        yield Check("speech", "elevenlabs", State.CONFIGURED, "ELEVENLABS_API_KEY is set")
+    else:
+        yield Check(
+            "speech",
+            "elevenlabs",
+            State.MISSING_KEY,
+            "the best voices here; bills per character",
+            "export ELEVENLABS_API_KEY=...",
+        )
+
 
 def _tool_checks() -> Iterator[Check]:
     if shutil.which("ffmpeg"):
-        yield Check("tools", "ffmpeg", State.READY, "available for converting audio.wav")
+        yield Check(
+            "tools", "ffmpeg", State.READY, "mp3 output available: mimem speak --format mp3"
+        )
     else:
-        yield Check("tools", "ffmpeg", State.NOT_INSTALLED, "WAV output only", "optional")
+        yield Check(
+            "tools",
+            "ffmpeg",
+            State.NOT_INSTALLED,
+            "WAV output only",
+            "optional; install ffmpeg for mp3",
+        )
 
     if shutil.which("uv"):
         yield Check("tools", "uv", State.READY, "the extension needs it at first start")

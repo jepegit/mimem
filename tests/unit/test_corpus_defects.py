@@ -434,3 +434,22 @@ def test_a_cross_reference_the_listener_cannot_follow_is_removed(written: str, s
 )
 def test_the_words_a_cross_reference_is_made_of_still_work_as_words(text: str) -> None:
     assert _spoken(text) == text
+
+
+def test_generated_text_is_verbalized_the_way_the_factory_says() -> None:
+    """A card prompt and a fallback transition are built from source text, so they carry
+    whatever the source carries -- and they were reaching :func:`verbalize_text` directly,
+    where ``strip_superscripts`` defaults to False.
+
+    In a paper that cites with superscript numbers, that left the reference marker in the
+    generated half of a beat while the quoted half beside it had none: "were prepared from
+    slurries.19. More on upon cycling." Four of the corpus's remaining NUM-02 errors were this,
+    and every one of them was in text mimem wrote itself.
+    """
+    from mimem.plan.beats import BeatFactory, section_fallback_transition
+
+    title = "Synthesis and Microstructure.19"
+    assert "19" in section_fallback_transition(BeatFactory(load_profile("study")), title)
+    assert "19" not in section_fallback_transition(
+        BeatFactory(load_profile("study"), strip_superscripts=True), title
+    )

@@ -48,12 +48,23 @@ ISBN = re.compile(r"\bISBN[- ]?(?:13|10)?:?\s*[\d-]{10,17}\b", re.I)
 #: pattern started at "Figure" and left "(see " behind, which the punctuation tidy-up below then
 #: reduced to a sentence ending in the word "see" -- "the interlayer distance see." -- in every
 #: paper that uses the parenthetical aside, which is most of them.
+#: How a table is numbered. Arabic, optionally with a supplementary "S", a decimal part and a
+#: panel letter -- or **Roman**, which is how most journals number their tables: "see Table I",
+#: "confirm this trend (see Table II)". Five of one paper's eight ``STR-08`` errors were the
+#: Roman half, read out as an instruction the listener cannot follow.
+#:
+#: A bare Roman numeral is never matched: the label has to come first, so the "I" in "I show"
+#: is never a table.
+_REFERENCE_NUMBER = r"S?\d+(?:\.\d+)*[a-z]?|[IVXLC]{1,6}\b"
+
+
 CROSS_REFERENCE = re.compile(
     r"\(?\s*\b(?:as\s+)?"
     r"(?:see|shown|seen|illustrated|summari[sz]ed|listed|given|presented|reported)?\s*"
     r"\b(?:in|by)?\s*"
     r"\(?\b(?:Fig(?:ure|s?)?|Tables?|Schemes?|Eq(?:uation|s?)?|Sect(?:ion)?s?|Ref(?:s?|erence)?)\.?\s*"
-    r"(?:S)?\d+(?:\.\d+)*[a-z]?(?:\s*(?:[-–,]|and)\s*(?:S)?\d+(?:\.\d+)*[a-z]?)*\)?",
+    r"(?:" + _REFERENCE_NUMBER + r")"
+    r"(?:\s*(?:[-–,]|and)\s*(?:" + _REFERENCE_NUMBER + r"))*\)?",
     re.IGNORECASE,
 )
 
@@ -61,9 +72,16 @@ CROSS_REFERENCE = re.compile(
 #: cross-reference and just as unfollowable, but with no number for the pattern above to anchor
 #: on. STR-08 catches these in the finished audio; this is what stops them getting there.
 BARE_CROSS_REFERENCE = re.compile(
-    r",?\s*\b(?:as\s+)?(?:shown|seen|illustrated|summari[sz]ed|listed|given|presented|depicted)"
+    r",?\s*(?:"
+    r"\b(?:as\s+)?(?:shown|seen|illustrated|summari[sz]ed|listed|given|presented|depicted)"
     r"\s+(?:in|by)\s+the\s+(?:figure|table|plot|graph|chart|scheme|diagram|panel|equation)s?"
-    r"(?:\s+(?:above|below|opposite))?",
+    r"(?:\s+(?:above|below|opposite))?"
+    # "see Figure" with nothing after it. Left behind by an earlier pass -- a number that was
+    # a page label, or a reference the column break took away -- and, in one paper, promoted
+    # into a *concept*: "What did they report for see Figure?"
+    r"|\(?\s*\bsee\s+(?:the\s+)?"
+    r"(?:Fig(?:ure|s)?|Tables?|Schemes?|Eq(?:uation|s)?|Sect(?:ion)?s?)\b\.?\s*\)?"
+    r")",
     re.IGNORECASE,
 )
 
@@ -287,6 +305,10 @@ def verbalize_citations(
     text = re.sub(
         r"\s+\b(?:in|to|by|at|of|from|see|per)\b\s*(?=[.,;:)])", "", text, flags=re.IGNORECASE
     )
+    # ...and the coordinator, for the same reason and by the same shape. "The results are
+    # given in Table III and Figure 4" loses both references and is left as "the results
+    # are and."
+    text = re.sub(r"\s+\b(?:and|or)\b\s*(?=[.,;:)])", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
     # A removal at the start of a sentence leaves the comma that separated it from the rest.
     text = re.sub(r"^\s*,\s*", "", text)

@@ -367,3 +367,70 @@ def test_a_marker_is_still_only_stripped_where_the_paper_cites_that_way() -> Non
 
     assert count_superscript_citations("we measured conditions4 and stopped") == 1
     assert MIN_SUPERSCRIPT_EVIDENCE > 1
+
+
+# -- a glyph with no meaning, and a table numbered the other way --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("written", "spoken"),
+    [
+        # ACS puts the double bond of a carbonyl in the private use area, so "O-(C=O)-O"
+        # arrives with a character no speech engine has anything to say about. Eight TTS-01
+        # errors in one paper, all of them this.
+        (
+            "species containing C-O and O-(CO)-O bonds",
+            "species containing C-O and O-, C O,-O bonds",
+        ),
+        # ...and an em dash, in another paper's title.
+        (
+            "Effects of InhomogeneitiesNanoscale to Mesoscaleon the Durability",
+            "Effects of Inhomogeneities Nanoscale to Mesoscale on the Durability",
+        ),
+    ],
+)
+def test_a_private_use_character_never_reaches_the_speech_engine(written: str, spoken: str) -> None:
+    assert _spoken(written) == spoken
+
+
+@pytest.mark.parametrize(
+    ("written", "spoken"),
+    [
+        # Most journals number their tables in Roman, and the pattern only knew Arabic. Five of
+        # one paper's eight STR-08 errors were the Roman half.
+        (
+            "pyrolysis of sugar do confirm this trend (see Table II). Moreover, the increase",
+            "pyrolysis of sugar do confirm this trend. Moreover, the increase",
+        ),
+        (
+            "differences in electrochemical performance (see Table I). The large differences",
+            "differences in electrochemical performance. The large differences",
+        ),
+        # A reference with no number left at all -- and, in one paper, promoted into a concept:
+        # "What did they report for see Figure?"
+        (
+            "the trend continues, see Figure, and the capacity fades",
+            "the trend continues, and the capacity fades",
+        ),
+        # Deleting both halves of a coordination used to leave the coordinator behind.
+        ("the results are given in Table III and Figure 4.", "the results are."),
+    ],
+)
+def test_a_cross_reference_the_listener_cannot_follow_is_removed(written: str, spoken: str) -> None:
+    assert _spoken(written) == spoken
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A bare Roman numeral is never a table: the label has to come first.
+        "I show that the capacity fades.",
+        # "see" on its own is an ordinary verb.
+        "we see clear evidence of lithiation",
+        # And an ordinary coordination keeps its coordinator.
+        "we tested cells and modules, then stopped.",
+        "lithium and sodium were compared.",
+    ],
+)
+def test_the_words_a_cross_reference_is_made_of_still_work_as_words(text: str) -> None:
+    assert _spoken(text) == text

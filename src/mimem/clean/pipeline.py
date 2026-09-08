@@ -22,6 +22,7 @@ Order matters and is not negotiable:
 from __future__ import annotations
 
 from mimem.clean.artifacts import strip_page_artifacts
+from mimem.clean.back_matter import split_back_matter
 from mimem.clean.dehyphenate import dehyphenate
 from mimem.clean.extraction import (
     repair_dash_as_e,
@@ -57,6 +58,10 @@ def clean(doc: Document, *, drop_empty: bool = True) -> Document:
     # at this point, and "2.7e4" + ".2 V" matches nothing. The thorn repair above is
     # per-character and does not care, but this one needs both ends of the number.
     repair_dash_as_e(doc)
+    # Also after the merge, and for the opposite reason: merging is what puts the back matter
+    # on the end of the conclusion in the first place, so cutting it off earlier would only
+    # have to be done again.
+    split_back_matter(doc)
     assign_sections(doc)
     link_figures(doc)
     split_sentences(doc)

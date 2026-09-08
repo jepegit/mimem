@@ -296,3 +296,29 @@ def test_a_figure_description_may_not_quote_a_value_the_paper_never_wrote() -> N
 
     assert ground(read_off_the_plot, source), "a value only the image states is not verifiable"
     assert ground(qualitative, source) == []
+
+
+def test_a_dry_run_prices_the_model_it_was_asked_about(
+    sample_doc: Document, study: Profile
+) -> None:
+    """`--dry-run --model` used to quote the default model's price whatever you asked for.
+
+    Which broke the one question a dry run exists to answer -- what does the cheap model save
+    me? On a 98-page review it reported $2.48 for Opus, Sonnet and Haiku alike, for prices that
+    differ by nearly twenty-fold.
+    """
+    registry = build_registry(sample_doc, Listener())
+    opus = plan_requests(sample_doc, registry, study, Listener(), "claude-opus-5")
+    haiku = plan_requests(sample_doc, registry, study, Listener(), "claude-haiku-4-5-20251001")
+
+    assert len(opus.requests) == len(haiku.requests)
+    assert haiku.total() < opus.total() / 5
+    assert all(r.model == "claude-haiku-4-5-20251001" for r in haiku.requests)
+
+
+def test_a_dry_run_without_a_model_uses_the_default(sample_doc: Document, study: Profile) -> None:
+    from mimem.llm import DEFAULT_MODEL
+
+    registry = build_registry(sample_doc, Listener())
+    planned = plan_requests(sample_doc, registry, study, Listener())
+    assert all(r.model == DEFAULT_MODEL for r in planned.requests)

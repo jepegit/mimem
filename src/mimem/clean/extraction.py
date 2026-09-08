@@ -86,6 +86,7 @@ def math_placeholder_count(text: str) -> int:
 #: diffusion equation reads ``Dc Dr þ two omega 2E nine RTð1 nu Þ``. Three of twelve corpus
 #: papers carried it, 104 characters between them, and every one of them reached the audio.
 MATH_FONT = {
+    "\u00bc": " = ",  # vulgar one quarter, for the equals sign
     "\u00fe": "+",  # thorn, for the superscript plus of an ion
     "\u00f0": "(",  # eth
     "\u00de": ")",  # capital thorn
@@ -96,7 +97,12 @@ MATH_FONT = {
 #: and is followed by a vowel; here it *ends* a token, hard against a digit or a capital --
 #: ``Ni3þ``, ``Liþ``. Gated like the superscript-citation rule, and for the same reason: a
 #: repair that fires on one ambiguous character is worse than one that waits for a pattern.
-MATH_FONT_EVIDENCE = re.compile(r"[A-Za-z0-9][\u00fe\u00de]|\u00f0[A-Za-z0-9]")
+#: ...and the vulgar fraction, which the same font uses for the equals sign, so an energy gap
+#: reads "Eg\u00bc2.6 eV". It counts as evidence only when it is welded to characters on both
+#: sides: a real one quarter has a space in front of it, and this one never does.
+MATH_FONT_EVIDENCE = re.compile(
+    r"[A-Za-z0-9][\u00fe\u00de]|\u00f0[A-Za-z0-9]|[A-Za-z0-9]\u00bc[A-Za-z0-9]"
+)
 
 #: Below this many matches, leave the text alone. One thorn in a document is a name.
 MIN_MATH_FONT_EVIDENCE = 3

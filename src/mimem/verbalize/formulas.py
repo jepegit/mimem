@@ -124,3 +124,25 @@ def verbalize_formulas(text: str) -> str:
         return spoken_formula(match.group(0)) or match.group(0)
 
     return CANDIDATE.sub(replace, text)
+
+
+def element_groups(token: str) -> int:
+    """How many element symbols ``token`` is made of, or ``0`` if it is not made of them.
+
+    ``AlCl`` is two, ``conditions`` is none. Case does the work: an element symbol is a capital
+    followed by an optional lower-case letter, so an ordinary word can never be one.
+
+    Used by the citation stripper, which cannot otherwise tell a subscript from a reference
+    marker. Both are digits welded to a lower-case letter, and it was deleting "AlCl3" down to
+    "AlCl" -- along with ``TiCl4``, ``FeCl3``, ``SiCl4`` and every other formula ending in a
+    two-letter element. Silently: nothing downstream can tell a compound lost its subscript.
+    """
+    groups = 0
+    position = 0
+    while position < len(token):
+        match = _GROUP.match(token, position)
+        if match is None or match.end() == position or match.group(1) not in ELEMENTS:
+            return 0
+        groups += 1
+        position = match.end()
+    return groups

@@ -46,12 +46,37 @@ _TRANSFORM_KINDS = frozenset(
 #: lint rule found it. Kept short and colon-terminated so it cannot swallow a real sentence.
 _LABEL = r"(?:[A-Z][A-Za-z' -]{2,40}:\s*)?"
 
+#: What a journal prints in front of a back-matter label. ACS sets its section headings with a
+#: filled square, correspondence lines with an asterisk, affiliations with daggers -- and the
+#: anchored patterns below all begin ``^\s*``, so a single character of furniture in front of
+#: the label was enough to miss the block entirely. "*Correspondence to: ... Ningbo 315103,
+#: P. R. China Tel/Fax: +86 574 87902102" was narrated in full, postcode and telephone number
+#: included, in a paper whose only two errors were those two numbers.
+_MARK = r"[\s*\u25a0\u25aa\u2022\u00b7\u2020\u2021\u00a7#|_-]*"
+
+#: The headings a journal puts over its back matter. Everything after one of these is
+#: acknowledgement, funding, competing interests or an address -- none of it for a listener.
+#:
+#: They matter because the heading and its section arrive as **one paragraph**: ACS emits
+#: "\u25a0AUTHOR INFORMATION Notes The authors declare no competing financial interest.
+#: \u25a0ACKNOWLEDGMENTS We gratefully acknowledge funding from Department of Energy..." as a
+#: single block, so every pattern that anchors on the declaration itself begins in the wrong
+#: place and matches nothing. Six COH-01 errors across four papers were this one shape.
+_BACK_MATTER_HEADING = (
+    r"author\s+information|author\s+contributions?|acknowledge?ments?|acknowledgements?"
+    r"|associated\s+content|supporting\s+information|conflicts?\s+of\s+interest"
+    r"|competing\s+(financial\s+)?interests?|declarations?\s+of\s+(competing\s+)?interest"
+    r"|funding(\s+sources?)?|abbreviations?\s+used|data\s+availability"
+)
+
 #: Sentences that exist to organise the page, not to say anything.
 BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "paper roadmap",
         re.compile(
-            r"^\s*the\s+(remainder|rest)\s+of\s+th(is|e)\s+(paper|article|manuscript|chapter)"
+            r"^"
+            + _MARK
+            + r"the\s+(remainder|rest)\s+of\s+th(is|e)\s+(paper|article|manuscript|chapter)"
             r"\s+is\s+organi[sz]ed",
             re.I,
         ),
@@ -59,7 +84,11 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "declaration",
         re.compile(
-            r"^\s*" + _LABEL + r"(the\s+authors?\s+declare|no\s+conflicts?\s+of\s+interest|"
+            r"^"
+            + _MARK
+            + r""
+            + _LABEL
+            + r"(the\s+authors?\s+declare|no\s+conflicts?\s+of\s+interest|"
             r"all\s+authors?\s+(have\s+)?(read|approved)|data\s+(will\s+be\s+)?available)",
             re.I,
         ),
@@ -68,27 +97,32 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "copyright",
         re.compile(r"©|\ball rights reserved\b|\bcreative commons\b|\bunder a cc[- ]by\b", re.I),
     ),
-    ("license", re.compile(r"^\s*(this is an open access article|licen[sc]ed under)", re.I)),
-    ("submission dates", re.compile(r"^\s*received:.{0,80}accepted:", re.I | re.S)),
+    (
+        "license",
+        re.compile(r"^" + _MARK + r"(this is an open access article|licen[sc]ed under)", re.I),
+    ),
+    ("submission dates", re.compile(r"^" + _MARK + r"received:.{0,80}accepted:", re.I | re.S)),
     (
         "graphical abstract furniture",
-        re.compile(r"^\s*(graphical abstract|highlights|in brief|key ?points)\s*:?\s*$", re.I),
+        re.compile(
+            r"^" + _MARK + r"(graphical abstract|highlights|in brief|key ?points)\s*:?\s*$", re.I
+        ),
     ),
-    ("correspondence", re.compile(r"^\s*(correspondence|corresponding author)\b", re.I)),
+    ("correspondence", re.compile(r"^" + _MARK + r"(correspondence|corresponding author)\b", re.I)),
     (
         # Keywords are a heading in some journals and a bold run-in line in others. The
         # heading-driven role assignment catches the first and could never catch the second, so
         # a keyword list narrated as prose -- five noun phrases and no verb -- reached the
         # audio track until rule COH-01 was written.
         "keyword list",
-        re.compile(r"^\s*\**\s*key\s?words?\s*\**\s*:", re.I),
+        re.compile(r"^" + _MARK + r"\**\s*key\s?words?\s*\**\s*:", re.I),
     ),
     (
         # A row of panel labels lifted out of a figure: "(a) (b) (c) (d)". It is a legend for
         # regions of a picture and carries no sentence at all -- narrated, it becomes "a, b, c,
         # d, e, f." spoken aloud, which happened.
         "panel labels",
-        re.compile(r"^\s*[(\[]?[a-h][)\]]?(?:[\s,;]+[(\[]?[a-h][)\]]?){1,7}\s*$", re.I),
+        re.compile(r"^" + _MARK + r"[(\[]?[a-h][)\]]?(?:[\s,;]+[(\[]?[a-h][)\]]?){1,7}\s*$", re.I),
     ),
     (
         # "Supplemental information can be found online at ..." -- a pointer to something the
@@ -104,10 +138,19 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "article type banner",
         re.compile(
-            r"^\s*(research(\s+article)?|original\s+(research|article)|review(\s+article)?"
+            r"^"
+            + _MARK
+            + r"(research(\s+article)?|original\s+(research|article)|review(\s+article)?"
             r"|article|letter|communication|perspective|editorial|mini[- ]?review)\s*$",
             re.I,
         ),
+    ),
+    (
+        # A whole back-matter section in one paragraph, heading and all. Dropping it on the
+        # heading rather than on the declaration is what makes it reachable: the declaration is
+        # in the middle of the block, and every other pattern here is anchored at the start.
+        "back matter",
+        re.compile(r"^" + _MARK + r"(" + _BACK_MATTER_HEADING + r")\b", re.I),
     ),
     (
         # The journal's own citation line: "Ionics (2026) 32:7477-7499  https://doi.org/10...".

@@ -213,3 +213,51 @@ def test_a_row_of_panel_labels_is_dropped() -> None:
     decision = _decide(Block(id="b", kind=BlockKind.PARAGRAPH, text="(a) (b) (c) (d) (e) (f)"))
     assert decision.action is TriageAction.DROP
     assert decision.reason == "panel labels"
+
+
+# -- back matter the anchored patterns could not reach ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        # A whole back-matter section in one paragraph, heading and all. Every boilerplate
+        # pattern is anchored at the start of the block, and the declaration is in the middle
+        # of it -- so dropping on the heading is what makes the block reachable at all.
+        (
+            "■AUTHOR INFORMATION Notes The authors declare no competing financial "
+            "interest. ■ACKNOWLEDGMENTS We gratefully acknowledge funding from the "
+            "Department of Energy Office of Basic Energy Sciences.",
+            "back matter",
+        ),
+        (
+            "■AUTHOR INFORMATION Corresponding Authors *E-mail: stevenson@example.edu. "
+            "Present Address: Chemical and Biomolecular Engineering.",
+            "back matter",
+        ),
+        # One character of furniture in front of the label was enough to miss the block. The
+        # postcode and the telephone number in this one were the paper's only two lint errors.
+        (
+            "*Correspondence to: Wen-zhi Yang, PhD Ningbo Branch of China Academy of Ordnance "
+            "Science, Ningbo 315103, P. R. China Tel/Fax: +86 574 87902102",
+            "correspondence",
+        ),
+    ],
+)
+def test_a_marker_in_front_of_the_label_no_longer_hides_the_block(text: str, reason: str) -> None:
+    doc = triage(_doc(("paragraph", "body", text)))
+    decision = doc.blocks[0].triage
+    assert decision is not None
+    assert decision.action is TriageAction.DROP
+    assert decision.rule == "COH-01"
+    assert decision.reason == reason
+
+
+def test_prose_that_opens_with_a_dash_is_still_prose() -> None:
+    """The marker class includes the dash, which is the character that could run away with it."""
+    text = (
+        "- the interphase keeps consuming lithium at every cycle, which is why the coulombic "
+        "efficiency never quite reaches one and the cell fades."
+    )
+    doc = triage(_doc(("paragraph", "body", text)))
+    assert doc.blocks[0].triage.action is not TriageAction.DROP

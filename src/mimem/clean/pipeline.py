@@ -23,7 +23,11 @@ from __future__ import annotations
 
 from mimem.clean.artifacts import strip_page_artifacts
 from mimem.clean.dehyphenate import dehyphenate
-from mimem.clean.extraction import repair_math_font, strip_extraction_artifacts
+from mimem.clean.extraction import (
+    repair_dash_as_e,
+    repair_math_font,
+    strip_extraction_artifacts,
+)
 from mimem.clean.figures import link_figures
 from mimem.clean.headings import split_stacked_headings
 from mimem.clean.line_numbers import strip_line_numbers
@@ -49,6 +53,10 @@ def clean(doc: Document, *, drop_empty: bool = True) -> Document:
     if drop_empty:
         _drop_empty(doc)
     merge_continuations(doc)
+    # After the merge, not before it: a range split across a column break is two fragments
+    # at this point, and "2.7e4" + ".2 V" matches nothing. The thorn repair above is
+    # per-character and does not care, but this one needs both ends of the number.
+    repair_dash_as_e(doc)
     assign_sections(doc)
     link_figures(doc)
     split_sentences(doc)

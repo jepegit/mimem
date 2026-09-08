@@ -108,6 +108,21 @@ def uses_broken_math_font(doc: Document) -> bool:
     return len(MATH_FONT_EVIDENCE.findall(text)) >= MIN_MATH_FONT_EVIDENCE
 
 
+#: The diagnostic the first repair leaves behind. It is also how the second one knows, because
+#: recognising this font *destroys the evidence for it*: the repair removes exactly the
+#: characters the detector looks for. The second repair runs after paragraph merging -- a range
+#: split across a column break is two fragments until then -- by which point a re-detection
+#: finds a clean document and does nothing.
+BROKEN_FONT_CODE = "math_font"
+
+
+def has_broken_math_font(doc: Document) -> bool:
+    """Whether this document's maths font is mis-mapped, before *or after* the first repair."""
+    if any(d.code == BROKEN_FONT_CODE for d in doc.diagnostics):
+        return True
+    return uses_broken_math_font(doc)
+
+
 def repair_math_font(doc: Document) -> int:
     """Put the operators back, when the document shows it needs it.
 
@@ -128,8 +143,45 @@ def repair_math_font(doc: Document) -> int:
             block.text = text
     if repaired:
         doc.note(
-            "math_font",
+            BROKEN_FONT_CODE,
             f"repaired {repaired} operators mapped onto Icelandic letters by a broken maths font",
+            stage="clean",
+            level=DiagnosticLevel.INFO,
+        )
+    return repaired
+
+
+#: The same broken font maps the en dash onto a lower-case ``e``, so a range of voltages reads
+#: ``2.7e4.2 V`` and a particle size ``50e70 nm``. Only ever applied inside a document that has
+#: already failed :func:`uses_broken_math_font`, because ``e`` between digits is otherwise
+#: scientific notation and rewriting *that* would be a far worse bug than the one being fixed.
+#:
+#: Both sides must be complete numbers and a unit must follow. ``1.5e-9`` keeps its meaning: the
+#: exponent has a sign and no unit, and nothing here touches it.
+DASH_AS_E = re.compile(r"(?<=\d)e(?=\d)")
+
+
+def repair_dash_as_e(doc: Document) -> int:
+    """Put back the en dash in a numeric range, where the font is known to be broken."""
+    if not has_broken_math_font(doc):
+        return 0
+    repaired = 0
+    for block in doc.blocks:
+        if not block.text:
+            continue
+        # A range: number, the mis-mapped dash, number, and then a unit or a word boundary.
+        text, count = re.subn(
+            r"(\d+(?:\.\d+)?)e(\d+(?:\.\d+)?)(?=\s*(?:[A-Za-zµΩÅ%]|$))",
+            r"\1 to \2",
+            block.text,
+        )
+        if count:
+            block.text = text
+            repaired += count
+    if repaired:
+        doc.note(
+            "dash_as_e",
+            f"repaired {repaired} numeric ranges whose en dash was extracted as the letter e",
             stage="clean",
             level=DiagnosticLevel.INFO,
         )

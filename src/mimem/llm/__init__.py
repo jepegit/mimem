@@ -23,6 +23,8 @@ from mimem.llm.client import (
     ScriptedClient,
 )
 from mimem.llm.cost import BudgetExceededError, Ledger, Plan, estimate, estimate_tokens
+from mimem.llm.openai import OpenAICompatibleClient
+from mimem.llm.reach import Check, State, survey
 from mimem.llm.schemas import (
     AnalogyOut,
     AnchorOut,
@@ -42,6 +44,7 @@ __all__ = [
     "BudgetExceededError",
     "CacheStats",
     "Cached",
+    "Check",
     "Client",
     "CompressOut",
     "FigureOut",
@@ -51,14 +54,17 @@ __all__ = [
     "LLMUnavailableError",
     "Ledger",
     "NullClient",
+    "OpenAICompatibleClient",
     "Plan",
     "RecordingClient",
     "Request",
     "Response",
     "ScriptedClient",
+    "State",
     "VerifyOut",
     "WhyOut",
     "estimate",
     "estimate_tokens",
+    "survey",
     "tasks",
 ]

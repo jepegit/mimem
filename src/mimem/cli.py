@@ -392,6 +392,12 @@ def elaborate(
         bool, typer.Option("--llm/--local", help="call a model, or run deterministic-only")
     ] = False,
     model: Annotated[str | None, typer.Option("--model")] = None,
+    provider: Annotated[
+        str, typer.Option("--provider", help=f"with --llm: {', '.join(PROVIDERS)}")
+    ] = "anthropic",
+    base_url: Annotated[
+        str | None, typer.Option("--base-url", help="for --provider openai/local")
+    ] = None,
     budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
     no_cache: Annotated[bool, typer.Option("--no-cache")] = False,
 ) -> None:
@@ -416,7 +422,7 @@ def elaborate(
         console.print(planned.report(batch=True), style="dim")
         return
 
-    client = _make_client(fixtures, live, model, settings, no_cache)
+    client = _make_client(fixtures, live, model, settings, no_cache, provider, base_url)
     try:
         report = run_elaborate(doc, registry, profile, listener, client, budget=budget)
     except BudgetExceededError as exc:
@@ -543,6 +549,12 @@ def build(
         bool, typer.Option("--llm/--local", help="call a model for stage 6, or skip it")
     ] = False,
     budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
+    provider: Annotated[
+        str, typer.Option("--provider", help=f"with --llm: {', '.join(PROVIDERS)}")
+    ] = "anthropic",
+    base_url: Annotated[
+        str | None, typer.Option("--base-url", help="for --provider openai/local")
+    ] = None,
     speak_with: Annotated[
         str | None,
         typer.Option("--speak", help=f"also synthesise audio; one of: {', '.join(ENGINES)}"),
@@ -564,7 +576,7 @@ def build(
     # The nine stages live in `mimem.pipeline`, shared with the assistant server: two copies of
     # that sequence would drift the first time a stage moved.
     client = (
-        _make_client(fixtures, live, None, settings, no_cache=False)
+        _make_client(fixtures, live, None, settings, False, provider, base_url)
         if (fixtures is not None or live)
         else None
     )
@@ -671,6 +683,117 @@ def speak(
     for path in result.write(destination):
         console.print(f"[green]wrote[/] {path}")
     _print_synthesis(result)
+
+
+@app.command()
+def record(
+    source: Annotated[Path, typer.Argument(help="the document to run against a live model")],
+    out_dir: Annotated[Path, typer.Option("--out", "-o", help="where the fixtures go")] = Path(
+        "fixtures"
+    ),
+    provider: Annotated[
+        str, typer.Option("--provider", help=f"one of: {', '.join(PROVIDERS)}")
+    ] = "anthropic",
+    model: Annotated[str | None, typer.Option("--model")] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    profile_name: Annotated[str, typer.Option("--profile", "-p")] = "study",
+    listener_file: Annotated[Path | None, typer.Option("--listener")] = None,
+    budget: Annotated[float | None, typer.Option("--budget", help="hard cap in US dollars")] = None,
+) -> None:
+    """Run stage 6 against a live model once, and keep every answer as a fixture.
+
+    One paid run becomes a set anyone can replay with ``--fixtures`` for nothing, forever. That
+    is how the worked example in the docs stays reproducible, how the tests stay free, and how
+    you compare two changes to the *rest* of the pipeline without the model moving underneath
+    the comparison.
+
+    **This one always bills.** Every other command defaults to spending nothing; this is the
+    exception, and it says so rather than hiding behind a flag.
+    """
+    settings = Settings()
+    profile, listener = _profile_and_listener(profile_name, listener_file, settings)
+    try:
+        doc = run_clean(run_ingest(source))
+    except IngestError as exc:
+        _fail(str(exc))
+        return
+    doc = run_triage(doc)
+    registry = build_registry(doc, listener)
+
+    from mimem.llm import RecordingClient
+
+    inner = _live_client(provider, model, base_url)
+    client = RecordingClient(inner=inner, directory=out_dir)
+    console.print(f"recording [bold]{provider}[/] answers into {out_dir}")
+    try:
+        report = run_elaborate(doc, registry, profile, listener, client, budget=budget)
+    except BudgetExceededError as exc:
+        _fail(str(exc))
+        return
+
+    written = sorted(out_dir.glob("*.json"))
+    console.print(f"[green]wrote[/] {len(written)} fixtures to {out_dir}")
+    console.print(f"  replay with: mimem build {source} --fixtures {out_dir}", style="dim")
+    _print_elaboration(report)
+
+
+@app.command()
+def doctor(
+    live: Annotated[
+        bool,
+        typer.Option("--live", help="actually call each configured provider, not just check it"),
+    ] = False,
+    model: Annotated[str | None, typer.Option("--model", help="model to use for --live")] = None,
+) -> None:
+    """What AI is reachable from here, and the exact next thing to type for what is not.
+
+    Nothing in mimem requires a model: run this on a machine with no keys and it will say so
+    and tell you what still works. That is the point of it. The alternative -- and what
+    happened before this command existed -- is meeting each absence separately as its own
+    confusing error and concluding the tool is broken.
+
+    ``--live`` sends one tiny structured request to each configured provider, because "the key
+    is set" and "the key works" are different claims.
+    """
+    from mimem.llm.reach import State, probe, survey
+
+    checks = survey()
+    if live:
+        with console.status("calling each configured provider..."):
+            checks = [probe(c, model=model) for c in checks]
+
+    colour = {
+        State.READY: "green",
+        State.CONFIGURED: "cyan",
+        State.MISSING_KEY: "yellow",
+        State.NOT_INSTALLED: "yellow",
+        State.UNREACHABLE: "red",
+        State.FAILED: "red",
+    }
+    group = ""
+    for check in checks:
+        if check.group != group:
+            group = check.group
+            console.print(f"\n[bold]{group}[/]")
+        # Pad the plain value before wrapping it in markup: the tags are zero-width on screen
+        # and full-width to `format`, so padding the marked-up string misaligns every row.
+        state = f"[{colour[check.state]}]{check.state.value:<14}[/]"
+        console.print(f"  {check.name:<11}{state}{check.detail}", highlight=False)
+        if not check.ok and check.fix:
+            console.print(f"  {'':<11}[dim]-> {check.fix}[/]", highlight=False)
+
+    if not live:
+        console.print(
+            "\n[dim]Configuration only. Run `mimem doctor --live` to make one real request "
+            "to each provider.[/]"
+        )
+    usable = [c for c in checks if c.group == "text generation" and c.ok]
+    if len(usable) == 1:
+        console.print(
+            "\nThe assistant is your only route to a model right now, and it needs no key: "
+            "install the Claude Desktop extension, or see docs/ai/no-key.md for everything "
+            "that works without one."
+        )
 
 
 @app.command()
@@ -812,12 +935,52 @@ def _load_or_build_registry(
     return build_registry(doc, listener)
 
 
+#: What ``--provider`` takes. Four names, three implementations: ``openai`` and ``local`` are
+#: the same adapter with different defaults, because the difference between a hosted server and
+#: one on your laptop is a base URL.
+PROVIDERS = ("anthropic", "openai", "local")
+
+
+def _live_client(provider: str, model: str | None, base_url: str | None) -> Client:
+    """The one transport that can cost money, chosen explicitly."""
+    if provider == "anthropic":
+        from mimem.llm import DEFAULT_MODEL, AnthropicClient
+
+        return AnthropicClient(model=model or DEFAULT_MODEL)
+
+    from mimem.llm.openai import LOCAL_BASE_URLS, OpenAICompatibleClient
+
+    if provider == "openai":
+        client = OpenAICompatibleClient(model=model or "gpt-4o-mini")
+        if base_url:
+            client.base_url = base_url.rstrip("/")
+        return client
+
+    if provider == "local":
+        from mimem.llm.reach import port_open
+
+        # Find the server the user has already started rather than asking them which one it
+        # is: `mimem doctor` reports the same set, so the two agree about what "local" means.
+        url = base_url or next((u for u in LOCAL_BASE_URLS.values() if port_open(u)), None)
+        if url is None:
+            _fail(
+                "no local model server is listening. Start one (`ollama serve`), or pass "
+                "--base-url. `mimem doctor` lists the ports that were checked."
+            )
+        return OpenAICompatibleClient(base_url=str(url), model=model or "llama3.2")
+
+    _fail(f"unknown provider {provider!r}; available: {', '.join(PROVIDERS)}")
+    raise AssertionError("unreachable")  # pragma: no cover - _fail exits
+
+
 def _make_client(
     fixtures: Path | None,
     live: bool,
     model: str | None,
     settings: Settings,
     no_cache: bool,
+    provider: str = "anthropic",
+    base_url: str | None = None,
 ) -> Client:
     """Pick a transport. The default refuses, which is the point.
 
@@ -828,9 +991,7 @@ def _make_client(
     if fixtures is not None:
         client = FixtureClient(fixtures)
     elif live:
-        from mimem.llm import DEFAULT_MODEL, AnthropicClient
-
-        client = AnthropicClient(model=model or DEFAULT_MODEL)
+        client = _live_client(provider, model, base_url)
     else:
         client = NullClient()
     if no_cache or isinstance(client, NullClient):

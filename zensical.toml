@@ -20,6 +20,12 @@ nav = [
     "listening/audio.md",
     "listening/tuning.md",
   ] },
+  { "Using a model" = [
+    "ai/index.md",
+    "ai/no-key.md",
+    "ai/local.md",
+    "ai/api.md",
+  ] },
   { "The science" = [
     "science/index.md",
     "knowledge-base/README.md",

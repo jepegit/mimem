@@ -11,6 +11,7 @@ prints it, the server summarises it for a conversation.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -93,6 +94,8 @@ def build_all(
     *,
     client: Client | None = None,
     budget: float | None = None,
+    model: str | None = None,
+    progress: Callable[[str, str], None] | None = None,
 ) -> BuildResult:
     """Stages 1 through 9: a source document to a checked programme on disk.
 
@@ -113,7 +116,15 @@ def build_all(
     elaboration = None
     if client is not None:
         elaboration = elaborate(
-            doc, registry, profile, listener, client, budget=budget, out_dir=out_dir
+            doc,
+            registry,
+            profile,
+            listener,
+            client,
+            budget=budget,
+            out_dir=out_dir,
+            model=model,
+            progress=progress,
         )
 
     script = plan(doc, registry, profile, listener)

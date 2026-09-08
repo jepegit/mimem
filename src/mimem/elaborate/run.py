@@ -227,12 +227,25 @@ def elaborate(
     *,
     budget: float | None = None,
     out_dir: Path | None = None,
+    model: str | None = None,
+    progress: Callable[[str, str], None] | None = None,
 ) -> ElaborationReport:
     """Fill in the glosses, anchors, why-explanations and analogies the budget allows.
 
     Mutates ``registry``. With :class:`NullClient` -- the default -- nothing is written and every
     task is recorded as degraded, which is exactly what ``--local`` mode should produce: a
     complete, honest report of what was not done.
+
+    ``model`` is stamped onto every request, and it has to be, because ``Request.model`` carries
+    ``DEFAULT_MODEL`` and ``AnthropicClient`` resolves ``request.model or self.model`` -- a
+    default that is always truthy, so the client's own model was never reached. ``--model``
+    was accepted, ignored, and billed at the default's price: one real run asked for Haiku,
+    was answered by Opus, and cost $0.79 instead of about a tenth of that. The estimate is
+    priced from ``request.model`` too, so stamping here is also what makes the ledger true.
+
+    ``progress`` is called before each request as ``(task, subject)``. Stage 6 is the only part
+    of a build that is slow *and* silent -- twenty-six calls with no output looks exactly like a
+    hang, which is how it was first reported.
     """
     client = client or NullClient()
     report = ElaborationReport(ledger=Ledger(cap=budget))
@@ -266,6 +279,8 @@ def elaborate(
                 partial(_apply_gloss, concept),
                 source=source,
                 fallback="the source's own definitional sentence",
+                model=model,
+                progress=progress,
                 mode=modes["gloss"],
                 on_degrade=partial(_definition_from_the_source, concept, pool),
             )
@@ -279,6 +294,8 @@ def elaborate(
                 source=source,
                 kinds=GROUNDING_KINDS["anchor"],
                 fallback="no anchor",
+                model=model,
+                progress=progress,
                 mode=modes["anchor"],
             )
         if concept.why is None:
@@ -290,6 +307,8 @@ def elaborate(
                 partial(_apply_why, concept, spans),
                 source=source,
                 fallback="no why-explanation",
+                model=model,
+                progress=progress,
                 mode=modes["why"],
             )
 
@@ -306,10 +325,12 @@ def elaborate(
             source="\n".join(support),
             kinds=GROUNDING_KINDS["analogy"],
             fallback="no analogy",
+            model=model,
+            progress=progress,
             mode=modes["analogy"],
         )
 
-    _describe_figures(report, client, doc, document, out_dir)
+    _describe_figures(report, client, doc, document, out_dir, model=model, progress=progress)
     return report
 
 
@@ -319,6 +340,9 @@ def _describe_figures(
     doc: Document,
     document: str,
     out_dir: Path | None,
+    *,
+    model: str | None = None,
+    progress: Callable[[str, str], None] | None = None,
 ) -> None:
     """Say what each figure shows, when there is a crop to look at (PLAN-figures stage C).
 
@@ -339,6 +363,10 @@ def _describe_figures(
         if image is None:
             continue
         request = tasks.figure(task.caption, task.references, document, image)
+        if model:
+            request = replace(request, model=model)
+        if progress is not None:
+            progress("figure", task.label or "a figure")
         report._count(report.attempted, "figure")
         label = f"figure {task.number}" if task.number else "a figure"
         try:
@@ -381,6 +409,8 @@ def _run(
     kinds: tuple[str, ...] = ("number", "year", "name", "direction"),
     on_degrade: Deterministic | None = None,
     mode: Mode = Mode.PREFER,
+    model: str | None = None,
+    progress: Callable[[str, str], None] | None = None,
 ) -> None:
     """One task: its two implementations, its budget, its grounding check, and who wins.
 
@@ -402,6 +432,11 @@ def _run(
         # place that measures the two against each other.
         report._count(report.deterministic, request.task)
         return
+
+    if model:
+        request = replace(request, model=model)
+    if progress is not None:
+        progress(request.task, concept.canonical)
 
     report._count(report.attempted, request.task)
     try:

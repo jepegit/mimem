@@ -429,7 +429,21 @@ def elaborate(
 
     client = _make_client(fixtures, live, model, settings, no_cache, provider, base_url)
     try:
-        report = run_elaborate(doc, registry, profile, listener, client, budget=budget)
+        with console.status("elaborating...") as status:
+
+            def tick(task: str, subject: str) -> None:
+                status.update(f"{task}: {subject}")
+
+            report = run_elaborate(
+                doc,
+                registry,
+                profile,
+                listener,
+                client,
+                budget=budget,
+                model=model,
+                progress=tick if live else None,
+            )
     except BudgetExceededError as exc:
         _fail(str(exc))
         return
@@ -592,7 +606,23 @@ def build(
         else None
     )
     try:
-        result = build_all(source, out_dir, profile, listener, client=client, budget=budget)
+        # Stage 6 is the only part of a build that is slow *and* silent. Twenty-six calls with
+        # no output looks exactly like a hang, which is how it was first reported.
+        with console.status("reading...") as status:
+
+            def tick(task: str, subject: str) -> None:
+                status.update(f"{task}: {subject}")
+
+            result = build_all(
+                source,
+                out_dir,
+                profile,
+                listener,
+                client=client,
+                budget=budget,
+                model=model,
+                progress=tick if live else None,
+            )
     except IngestError as exc:
         _fail(str(exc))
         return
@@ -902,7 +932,21 @@ def record(
     client = RecordingClient(inner=inner, directory=out_dir)
     console.print(f"recording [bold]{provider}[/] answers into {out_dir}")
     try:
-        report = run_elaborate(doc, registry, profile, listener, client, budget=budget)
+        with console.status("elaborating...") as status:
+
+            def tick(task: str, subject: str) -> None:
+                status.update(f"{task}: {subject}")
+
+            report = run_elaborate(
+                doc,
+                registry,
+                profile,
+                listener,
+                client,
+                budget=budget,
+                model=model,
+                progress=tick,
+            )
     except BudgetExceededError as exc:
         _fail(str(exc))
         return

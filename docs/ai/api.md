@@ -16,6 +16,16 @@ export ANTHROPIC_API_KEY=sk-ant-...
 uv run mimem doctor --live
 ```
 
+Or put it in a `.env` at the project root, which mimem reads on startup:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+`.env` is in `.gitignore`. A variable exported in your shell always wins over the file — a file
+you edited last month should not silently override what you just typed. `mimem doctor` names the
+file a key came from, never its contents.
+
 ```bash
 uv run mimem build paper.pdf --out out/paper --llm --provider anthropic
 ```
@@ -105,6 +115,7 @@ system working.
 | `...was not found (404)` | the base URL usually ends in `/v1`; check the model name |
 | `did not produce FigureOut in 3 attempts` | this model cannot hold that schema |
 | `no model configured` | you did not pass `--llm` |
+| `no credit` from `doctor --live` | the key is valid; the account cannot pay |
 
 !!! warning "Neither hosted adapter has been run against a real key"
 

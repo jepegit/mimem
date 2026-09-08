@@ -19,6 +19,7 @@ from rich.console import Console
 from rich.table import Table
 
 from mimem import __version__
+from mimem import env as dotenv
 from mimem.clean import clean as run_clean
 from mimem.concepts import build as build_registry
 from mimem.concepts import norms
@@ -61,6 +62,10 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+# Before any command runs, so a key written in a `.env` is there when the SDK looks for it in
+# `os.environ`. A variable already exported in this shell always wins -- see `mimem.env`.
+dotenv.load()
 
 
 def _speakable_console(*, stderr: bool = False) -> Console:
@@ -937,6 +942,7 @@ def doctor(
         State.MISSING_KEY: "yellow",
         State.NOT_INSTALLED: "yellow",
         State.UNREACHABLE: "red",
+        State.NO_CREDIT: "yellow",
         State.FAILED: "red",
     }
     group = ""

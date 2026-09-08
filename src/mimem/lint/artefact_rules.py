@@ -95,7 +95,17 @@ class DropListRespected(ArtefactRule):
     #: The furniture itself, in the words it is usually written in (design rules section 6).
     FURNITURE = (
         (r"\bthis work was (?:supported|funded|financed)\b", "funding statement"),
-        (r"\bwe (?:thank|acknowledge|are grateful)\b", "acknowledgement"),
+        (r"\bwe (?:thank|are grateful)\b", "acknowledgement"),
+        # "We acknowledge" needs its object, because it is two different sentences. "We
+        # acknowledge support from the Research Council" is a credit; "we acknowledge that
+        # artificial intelligence can play additional roles, but we narrow our focus" is a
+        # concession, and ordinary scientific prose. The bare verb failed a real paper's build
+        # -- an *error*, so it also refused to synthesise the audio -- over the second kind.
+        (
+            r"\bwe (?:gratefully |also )?acknowledge (?:the |their |generous |financial )*"
+            r"(?:support|funding|assistance|help|contribution|use of|access to)\b",
+            "acknowledgement",
+        ),
         (r"\bthe authors declare\b", "competing-interests boilerplate"),
         (r"\bcorrespondence should be addressed\b", "correspondence address"),
         (r"\ball rights reserved\b", "copyright notice"),

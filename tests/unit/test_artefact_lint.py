@@ -168,3 +168,32 @@ def test_a_report_says_what_it_could_not_check(
     partial = lint_script(interphase_script, profile=study_profile)
     assert {line.split(":")[0] for line in partial.skipped} == set(IDS)
     assert "not checked here" in partial.summary()
+
+
+@pytest.mark.parametrize(
+    ("sentence", "fires"),
+    [
+        ("We acknowledge that artificial intelligence can play additional roles.", False),
+        ("The authors acknowledge that this is a limitation of the study.", False),
+        ("We acknowledge support from the Research Council of Norway.", True),
+        ("We gratefully acknowledge the financial support of the sponsor.", True),
+        ("We acknowledge access to the beamline at the synchrotron.", True),
+        ("We thank the cleanroom staff for the release etch.", True),
+    ],
+)
+def test_acknowledge_needs_its_object(sentence: str, fires: bool) -> None:
+    """ "We acknowledge" is two different sentences, and only one is an acknowledgement.
+
+    "We acknowledge support from X" is a credit. "We acknowledge that X can also do Y, but we
+    narrow our focus" is a concession, and ordinary scientific prose. The bare verb failed a
+    real paper's build -- as an *error*, so it also refused to synthesise the audio -- over the
+    second kind.
+    """
+    import re
+
+    from mimem.lint.artefact_rules import DropListRespected
+
+    matched = any(
+        re.search(pattern, sentence, re.IGNORECASE) for pattern, _ in DropListRespected.FURNITURE
+    )
+    assert matched is fires

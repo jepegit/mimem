@@ -568,6 +568,9 @@ def build(
         typer.Option("--speak", help=f"also synthesise audio; one of: {', '.join(ENGINES)}"),
     ] = None,
     voice: Annotated[str | None, typer.Option("--voice", help="engine's own voice name")] = None,
+    audio_format: Annotated[
+        str, typer.Option("--format", help="with --speak: wav, or mp3 if ffmpeg is installed")
+    ] = "wav",
 ) -> None:
     """The whole pipeline: source document to a listenable, checkable programme.
 
@@ -621,8 +624,13 @@ def build(
             except (EngineError, AudioError, ValueError) as exc:
                 _fail(str(exc))
                 return
-            for path in synthesis.write(out_dir):
+            written = synthesis.write(out_dir)
+            for path in written:
                 console.print(f"[green]wrote[/] {path}")
+            if audio_format == "mp3":
+                _write_mp3(written[0])
+            elif audio_format != "wav":
+                _fail(f"unknown format {audio_format!r}; use wav or mp3")
             _print_synthesis(synthesis)
 
     if not result.lint.ok:
@@ -699,16 +707,7 @@ def speak(
         console.print(f"[green]wrote[/] {path}")
 
     if audio_format == "mp3":
-        from mimem.speak.encode import ConversionError, to_mp3
-
-        try:
-            mp3 = to_mp3(written[0])
-        except ConversionError as exc:
-            # The WAV is already on disk, so this is a smaller result rather than a failed run.
-            console.print(f"[yellow]no mp3[/] {exc}")
-        else:
-            saved = 1 - mp3.stat().st_size / written[0].stat().st_size
-            console.print(f"[green]wrote[/] {mp3}  ({saved:.0%} smaller; the WAV is kept)")
+        _write_mp3(written[0])
     elif audio_format != "wav":
         _fail(f"unknown format {audio_format!r}; use wav or mp3")
 
@@ -1213,6 +1212,25 @@ def _print_script_summary(script: Script, profile: Profile) -> None:
         console.print(f"  [yellow]note[/] {note}", style="dim")
     if script.dropped:
         console.print(f"  {len(script.dropped)} beats cut to fit the budget", style="dim")
+
+
+def _write_mp3(wav: Path) -> None:
+    """Convert a written WAV, or say why not.
+
+    A missing ffmpeg is a smaller result, never a failed run: the WAV is already on disk and is
+    what `timings.json` describes. Shared by `speak` and `build --speak`, which had drifted --
+    `speak` grew `--format` in M12 and `build` did not, so the one command that goes from PDF to
+    something playable could not produce the smaller file.
+    """
+    from mimem.speak.encode import ConversionError, to_mp3
+
+    try:
+        mp3 = to_mp3(wav)
+    except ConversionError as exc:
+        console.print(f"[yellow]no mp3[/] {exc}")
+        return
+    saved = 1 - mp3.stat().st_size / wav.stat().st_size
+    console.print(f"[green]wrote[/] {mp3}  ({saved:.0%} smaller; the WAV is kept)")
 
 
 def _print_synthesis(result: Synthesis) -> None:

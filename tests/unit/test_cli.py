@@ -150,3 +150,32 @@ def test_an_unknown_engine_is_a_clean_error(paper_pdf: Path, tmp_path: Path) -> 
     result = runner.invoke(app, ["speak", str(out), "--engine", "nope"])
     assert result.exit_code == 1
     assert "unknown engine" in result.stdout + str(result.stderr or "")
+
+
+def test_build_can_end_in_an_mp3(paper_pdf: Path, tmp_path: Path) -> None:
+    """`--speak` and `--format` belong to the same command.
+
+    `speak` grew `--format` in M12 and `build` did not, so the one command that goes from a PDF
+    to something playable could not produce the smaller file -- which is exactly the command
+    someone reaches for.
+    """
+    import shutil
+
+    out = tmp_path / "programme"
+    result = runner.invoke(
+        app, ["build", str(paper_pdf), "--out", str(out), "--speak", "silent", "--format", "mp3"]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert (out / "audio.wav").exists(), "the WAV is kept whatever the format"
+    if shutil.which("ffmpeg"):
+        assert (out / "audio.mp3").exists()
+    else:
+        assert "no mp3" in result.stdout
+
+
+def test_an_unknown_format_is_refused(paper_pdf: Path, tmp_path: Path) -> None:
+    out = tmp_path / "programme"
+    result = runner.invoke(
+        app, ["build", str(paper_pdf), "--out", str(out), "--speak", "silent", "--format", "flac"]
+    )
+    assert result.exit_code == 1

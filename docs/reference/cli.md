@@ -26,6 +26,8 @@ uv run mimem build paper.pdf --out out/paper --listener listener.yaml
 | `--provider` | With `--llm`: `anthropic` (default), `openai` or `local`. |
 | `--base-url` | For `--provider openai` or `local`; any compatible server. |
 | `--speak` | Also synthesise audio, with the named engine. |
+| `--voice` | The engine's own voice name. |
+| `--format` | With `--speak`: `wav` (default) or `mp3`, if `ffmpeg` is installed. |
 | `--fixtures` | Replay recorded elaborations from a directory instead of calling anything. |
 | `--budget` | Hard cap in US dollars, checked before each call. |
 

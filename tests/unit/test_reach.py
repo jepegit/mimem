@@ -72,6 +72,24 @@ def test_silence_is_always_a_speech_option(bare: None) -> None:
     assert _named(survey(), "speech", "silent").state is State.READY
 
 
+def test_sapi_is_judged_by_the_platform_not_by_powershell(
+    bare: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PowerShell on PATH is not the same as Windows, and CI proved it.
+
+    GitHub's Ubuntu runners ship PowerShell Core. The first version of this check looked only
+    for `pwsh`, so on Linux it went looking for `System.Speech`, failed the way a broken install
+    would, and turned the suite red on two of four matrix jobs.
+    """
+    monkeypatch.setattr("mimem.llm.reach.sys.platform", "linux")
+    monkeypatch.setattr("mimem.llm.reach.shutil.which", lambda name: "/usr/bin/pwsh")
+
+    sapi = _named(survey(), "speech", "sapi")
+    assert sapi.state is State.NOT_INSTALLED
+    assert "Windows" in sapi.detail
+    assert sapi.fix
+
+
 def test_port_open_is_false_for_a_closed_port() -> None:
     # Port 1 is reserved and never served by anything on a developer machine.
     assert port_open("http://127.0.0.1:1/v1", timeout=0.2) is False

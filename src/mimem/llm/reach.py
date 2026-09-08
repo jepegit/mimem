@@ -19,8 +19,10 @@ real request when asked to, and the report says plainly which kind of check it r
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
@@ -63,6 +65,15 @@ class Check:
     @property
     def ok(self) -> bool:
         return self.state.ok
+
+
+#: Colour codes a subprocess wrote for a terminal that is not this report.
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _one_line(message: str, limit: int = 90) -> str:
+    """A subprocess failure, made fit for a table row."""
+    return _ANSI.sub("", message).replace("\n", " ").strip()[:limit]
 
 
 def port_open(url: str, timeout: float = PORT_TIMEOUT) -> bool:
@@ -135,15 +146,40 @@ def _speech_checks() -> Iterator[Check]:
 
     yield Check("speech", "silent", State.READY, "always available; makes shaped silence")
 
-    if shutil.which("pwsh") or shutil.which("powershell"):
+    # Windows first, and PowerShell second. Checking only for `pwsh` looked equivalent and is
+    # not: GitHub's Ubuntu runners ship PowerShell Core, so that version of this check went
+    # looking for `System.Speech` on Linux, failed in the way a broken install would, and
+    # turned a green suite red. SAPI is a Windows component; PowerShell is only how it is
+    # reached.
+    if sys.platform != "win32":
+        yield Check(
+            "speech",
+            "sapi",
+            State.NOT_INSTALLED,
+            "Windows only",
+            "use --engine piper or --engine openai here",
+        )
+    elif shutil.which("pwsh") or shutil.which("powershell"):
         try:
             voices = SapiEngine().voices()
         except Exception as exc:
-            yield Check("speech", "sapi", State.FAILED, str(exc)[:80])
+            yield Check(
+                "speech",
+                "sapi",
+                State.FAILED,
+                _one_line(str(exc)),
+                "try `Add-Type -AssemblyName System.Speech` in PowerShell to see the real error",
+            )
         else:
             yield Check("speech", "sapi", State.READY, f"{len(voices)} voices installed")
     else:
-        yield Check("speech", "sapi", State.NOT_INSTALLED, "Windows only; PowerShell not found")
+        yield Check(
+            "speech",
+            "sapi",
+            State.NOT_INSTALLED,
+            "PowerShell not found on PATH",
+            "install PowerShell, or use --engine openai",
+        )
 
     if shutil.which("piper"):
         yield Check("speech", "piper", State.CONFIGURED, "binary on PATH", "pass --voice a.onnx")
@@ -197,9 +233,11 @@ def probe(check: Check, *, model: str | None = None) -> Check:
     try:
         detail = _ping(check.name, model)
     except (LLMUnavailableError, LLMRefusedError) as exc:
-        return Check(check.group, check.name, State.UNREACHABLE, str(exc)[:120], check.fix)
+        return Check(
+            check.group, check.name, State.UNREACHABLE, _one_line(str(exc), 120), check.fix
+        )
     except Exception as exc:
-        return Check(check.group, check.name, State.FAILED, str(exc)[:120], check.fix)
+        return Check(check.group, check.name, State.FAILED, _one_line(str(exc), 120), check.fix)
     return Check(check.group, check.name, State.READY, detail, check.fix)
 
 

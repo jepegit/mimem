@@ -453,3 +453,56 @@ def test_generated_text_is_verbalized_the_way_the_factory_says() -> None:
     assert "19" not in section_fallback_transition(
         BeatFactory(load_profile("study"), strip_superscripts=True), title
     )
+
+
+# -- the subscript the citation stripper was deleting -------------------------------------------
+#
+# The worst thing found in the whole stress run, because nothing reported it. "AlCl3" and a
+# reference marker are the same shape to the pattern -- digits welded to a lower-case letter --
+# so every formula ending in a two-letter element lost its subscript, silently, in any paper
+# that cites with superscript numbers.
+
+
+@pytest.mark.parametrize(
+    "formula",
+    ["AlCl3", "TiCl4", "SiCl4", "FeCl3", "NaCl2", "NiCl2", "MgBr2"],
+)
+def test_a_compound_keeps_its_subscript(formula: str) -> None:
+    assert strip_superscript_citations(f"and {formula} in solution") == f"and {formula} in solution"
+
+
+@pytest.mark.parametrize(
+    ("written", "stripped"),
+    [
+        # A word is not an element run, whatever it ends in.
+        ("we measured conditions4 and stopped", "we measured conditions and stopped"),
+        # One element symbol is not a compound -- and is also how a paper writes a name.
+        ("as reported by Li7 in that work", "as reported by Li in that work"),
+    ],
+)
+def test_a_marker_that_only_looks_like_a_subscript_still_goes(written: str, stripped: str) -> None:
+    assert strip_superscript_citations(written) == stripped
+
+
+def test_a_marker_after_a_quotation_mark() -> None:
+    """The quotation mark sits where the lookbehind wanted the sentence's last letter."""
+    written = 'understood through a simplified "falling cards model".25 Gases evolved'
+    assert strip_superscript_citations(written) == (
+        'understood through a simplified "falling cards model". Gases evolved'
+    )
+
+
+@pytest.mark.parametrize(
+    ("written", "spoken"),
+    [
+        # The standard solar spectrum. The designation pattern stopped at "AM1" and then refused
+        # the match because a decimal followed, so nothing claimed the token and "1.5" reached
+        # the audio as a bare number.
+        ("exposure to AM1.5 sunlight", "exposure to AM one point five sunlight"),
+        # ...and the designations that already worked, which must keep working.
+        ("the cathode NMC811", "the cathode NMC eight one one"),
+        ("a capacity of 3.5 mAh", "a capacity of three point five milliamp hours"),
+    ],
+)
+def test_a_designation_may_have_a_decimal_point_in_its_name(written: str, spoken: str) -> None:
+    assert _spoken(written) == spoken

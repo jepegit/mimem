@@ -201,10 +201,11 @@ _SUPERSCRIPT_AFTER_WORD = re.compile(rf"(?<=[a-zÅΩ])({_RUN})(?=[\s.,;:)]|$)")
 #: between them** is not a shape prose has. "Fig. 3" and "Ref. 12" have the space and never
 #: match; a decimal has a digit before its point and never matches either.
 #:
-#: The optional bracket or comma is for a marker that follows a parenthetical: "(LEDC).31" and
-#: "carbonates),.17" both put something between the last letter and the stop.
+#: The optional bracket, comma or quotation mark is for a marker that follows a parenthetical
+#: or a quotation: "(LEDC).31", "carbonates),.17" and a simplified "falling cards model".25 all
+#: put something between the last letter and the stop.
 _SUPERSCRIPT_AFTER_STOP = re.compile(
-    rf"(?:(?<=[A-Za-z][.!?])|(?<=[A-Za-z][)\],][.!?]))({_RUN})(?![A-Za-z])"
+    rf"(?:(?<=[A-Za-z][.!?])|(?<=[A-Za-z][)\],\"'”’][.!?]))({_RUN})(?![A-Za-z])"
 )
 
 #: Below this many markers, the pattern is more likely to be data than a citation style.
@@ -216,8 +217,27 @@ _WORD_BEFORE = re.compile(r"([A-Za-zΩµμÅ]+)$")
 def count_superscript_citations(text: str) -> int:
     """How many superscript reference markers this text appears to contain."""
     return len(_SUPERSCRIPT_AFTER_STOP.findall(text)) + sum(
-        1 for m in _SUPERSCRIPT_AFTER_WORD.finditer(text) if not _is_unit_exponent(text, m)
+        1
+        for m in _SUPERSCRIPT_AFTER_WORD.finditer(text)
+        if not _is_unit_exponent(text, m) and not _is_formula_subscript(text, m)
     )
+
+
+def _is_formula_subscript(text: str, match: re.Match[str]) -> bool:
+    """Is this run the subscript of a compound, rather than a reference marker?
+
+    ``AlCl3`` and ``conditions4`` are the same shape to the pattern -- digits welded to a
+    lower-case letter -- and the second is a citation. The difference is whether the letters
+    spell out element symbols.
+
+    Two groups minimum, for the reason :data:`~mimem.verbalize.formulas.MIN_GROUPS` gives: a
+    single symbol is a word about an element far more often than it is a compound, and "Li" and
+    "Bi" and "In" are also how a paper writes an author's name.
+    """
+    from mimem.verbalize.formulas import MIN_GROUPS, element_groups
+
+    word = _WORD_BEFORE.search(text[: match.start()])
+    return bool(word and element_groups(word.group(1)) >= MIN_GROUPS)
 
 
 def _is_unit_exponent(text: str, match: re.Match[str]) -> bool:
@@ -245,7 +265,10 @@ def strip_superscript_citations(text: str) -> str:
     """
     text = _SUPERSCRIPT_AFTER_STOP.sub("", text)
     return _SUPERSCRIPT_AFTER_WORD.sub(
-        lambda m: m.group(0) if _is_unit_exponent(text, m) else "", text
+        lambda m: (
+            m.group(0) if _is_unit_exponent(text, m) or _is_formula_subscript(text, m) else ""
+        ),
+        text,
     )
 
 

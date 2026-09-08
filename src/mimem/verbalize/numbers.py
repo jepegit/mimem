@@ -252,8 +252,14 @@ class NumberVerbalizer:
             # handler can check it against the unit lexicon first, because "cm2" is an exponent
             # and belongs to the number that precedes it.
             (
+                # The trailing decimal is part of the name, not a number after it. "AM1.5" is
+                # the standard solar spectrum, and the pattern used to stop at "AM1" and then
+                # refuse the match because a decimal followed -- so nothing claimed the token
+                # at all and "1.5" reached the audio as a bare number. The plain pass could not
+                # take it either: it will not start on a digit that follows a letter.
                 re.compile(
-                    r"(?<![\w.])(?P<token>(?=\w*[A-Za-z])(?=\w*\d)[A-Za-z0-9]+)(?!\w)(?!\.\d)"
+                    r"(?<![\w.])(?P<token>(?=\w*[A-Za-z])(?=\w*\d)[A-Za-z0-9]+(?:\.\d+)?)"
+                    r"(?!\w)(?!\.\d)"
                 ),
                 "designation",
             ),
@@ -307,7 +313,8 @@ class NumberVerbalizer:
                 if _NUMBER_BEFORE.search(m.string[: m.start()]):
                     return token
                 return unit
-            return re.sub(r"\d+", lambda d: f" {digits_to_words(d.group(0))} ", token).strip()
+            spoken = re.sub(r"\d+", lambda d: f" {digits_to_words(d.group(0))} ", token)
+            return re.sub(r"\s*\.\s*(?=\w)", " point ", spoken).strip()
         words = self._words(m["v"])
         return _attach_unit(m["v"], m.group("u4"), words)
 

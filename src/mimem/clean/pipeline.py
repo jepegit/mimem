@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from mimem.clean.artifacts import strip_page_artifacts
 from mimem.clean.dehyphenate import dehyphenate
-from mimem.clean.extraction import strip_extraction_artifacts
+from mimem.clean.extraction import repair_math_font, strip_extraction_artifacts
 from mimem.clean.figures import link_figures
 from mimem.clean.headings import split_stacked_headings
 from mimem.clean.line_numbers import strip_line_numbers
@@ -41,6 +41,7 @@ def clean(doc: Document, *, drop_empty: bool = True) -> Document:
         return doc
 
     strip_extraction_artifacts(doc)
+    repair_math_font(doc)
     strip_line_numbers(doc)
     split_stacked_headings(doc)
     dehyphenate(doc)

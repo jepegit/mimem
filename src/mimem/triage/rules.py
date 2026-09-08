@@ -134,6 +134,76 @@ MAX_MATH_PLACEHOLDERS = 2
 _ORIENTATION_ROLES = frozenset({BlockRole.TITLE, BlockRole.AUTHORS})
 
 
+#: The commonest function words in English. A sentence cannot avoid them: across 668 kept blocks
+#: from twelve papers, every one that was genuinely prose contained at least one, and every block
+#: of eight words or more that contained none was not prose at all.
+FUNCTION_WORDS = frozenset(
+    [
+        "the",
+        "a",
+        "an",
+        "of",
+        "in",
+        "to",
+        "for",
+        "and",
+        "or",
+        "is",
+        "are",
+        "was",
+        "were",
+        "with",
+        "that",
+        "this",
+        "by",
+        "on",
+        "as",
+        "at",
+        "from",
+        "be",
+        "been",
+        "it",
+        "its",
+        "which",
+        "we",
+        "our",
+        "their",
+        "have",
+        "has",
+        "had",
+        "than",
+        "these",
+        "those",
+        "but",
+        "not",
+    ]
+)
+
+#: Below this, a run of words without function words is a heading or a name, both of which are
+#: legitimate. "Structural Changes in Silicon Anodes" has "in"; "Nano Letters" has nothing and
+#: is four words long. Eight is where the corpus separates cleanly.
+MIN_NOT_PROSE_WORDS = 8
+
+
+def reads_as_prose(text: str) -> bool:
+    """Would a person reading this aloud be reading sentences?
+
+    The signal is function words, not digits. A table of unit-cell parameters is only 20%
+    numerals -- ``Li~1! 12a 0.375 0 0.25 Li~2! 48e`` -- so a numeric-density test misses it,
+    while a contents page is 98% full stops and a figure's axis labels are 100% numerals. What
+    all three share is that nothing in them is doing grammatical work.
+
+    Found by profiling the corpus rather than by choosing a rule: of 668 kept blocks this
+    rejects 37, and every one is journal front matter, an address, a contents page, a table, a
+    reference entry, an axis, or a heading whose letters were spaced out (``h i g h l i g h t
+    s``). No prose block in twelve papers has eight words and no function word.
+    """
+    words = text.split()
+    if len(words) < MIN_NOT_PROSE_WORDS:
+        return True
+    return any(word.lower().strip(".,;:()[]\u2019'\"") in FUNCTION_WORDS for word in words)
+
+
 def _decide(block: Block) -> TriageDecision:
     role, kind = block.role, block.kind
 
@@ -157,6 +227,14 @@ def _decide(block: Block) -> TriageDecision:
     for name, pattern in BOILERPLATE_PATTERNS:
         if pattern.search(block.text):
             return TriageDecision(action=TriageAction.DROP, rule="COH-01", reason=name)
+
+    if kind not in _TRANSFORM_KINDS and not reads_as_prose(block.text):
+        return TriageDecision(
+            action=TriageAction.DROP,
+            rule="COH-01",
+            reason="no function words: a table, an axis, a contents page or front matter",
+            confidence=0.8,
+        )
 
     if kind in _TRANSFORM_KINDS:
         return TriageDecision(

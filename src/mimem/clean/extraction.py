@@ -78,3 +78,59 @@ def strip_extraction_artifacts(doc: Document) -> Document:
 
 def math_placeholder_count(text: str) -> int:
     return text.count(MATH_PLACEHOLDER)
+
+
+#: A TeX maths font whose glyphs were mapped to the wrong code points on the way out of the PDF.
+#: Elsevier articles typeset with it emit Icelandic letters where the operators should be:
+#: ``Li/Liþ`` is the lithium ion, ``ðR3mÞ`` is the space group ``(R3m)``, and one paper's
+#: diffusion equation reads ``Dc Dr þ two omega 2E nine RTð1 nu Þ``. Three of twelve corpus
+#: papers carried it, 104 characters between them, and every one of them reached the audio.
+MATH_FONT = {
+    "\u00fe": "+",  # thorn, for the superscript plus of an ion
+    "\u00f0": "(",  # eth
+    "\u00de": ")",  # capital thorn
+    "\u00d0": "(",  # capital eth
+}
+
+#: Evidence that this is a broken font rather than Icelandic. In Icelandic, thorn begins a word
+#: and is followed by a vowel; here it *ends* a token, hard against a digit or a capital --
+#: ``Ni3þ``, ``Liþ``. Gated like the superscript-citation rule, and for the same reason: a
+#: repair that fires on one ambiguous character is worse than one that waits for a pattern.
+MATH_FONT_EVIDENCE = re.compile(r"[A-Za-z0-9][\u00fe\u00de]|\u00f0[A-Za-z0-9]")
+
+#: Below this many matches, leave the text alone. One thorn in a document is a name.
+MIN_MATH_FONT_EVIDENCE = 3
+
+
+def uses_broken_math_font(doc: Document) -> bool:
+    """Does this document map its maths operators onto Icelandic letters?"""
+    text = "\n".join(block.text for block in doc.blocks)
+    return len(MATH_FONT_EVIDENCE.findall(text)) >= MIN_MATH_FONT_EVIDENCE
+
+
+def repair_math_font(doc: Document) -> int:
+    """Put the operators back, when the document shows it needs it.
+
+    Whole-document rather than per-block, because the evidence is a property of the typesetting
+    and a single block may hold one ambiguous character.
+    """
+    if not uses_broken_math_font(doc):
+        return 0
+    repaired = 0
+    for block in doc.blocks:
+        if not block.text:
+            continue
+        text = block.text
+        for wrong, right in MATH_FONT.items():
+            text = text.replace(wrong, right)
+        if text != block.text:
+            repaired += sum(block.text.count(w) for w in MATH_FONT)
+            block.text = text
+    if repaired:
+        doc.note(
+            "math_font",
+            f"repaired {repaired} operators mapped onto Icelandic letters by a broken maths font",
+            stage="clean",
+            level=DiagnosticLevel.INFO,
+        )
+    return repaired

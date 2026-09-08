@@ -792,4 +792,17 @@ def section_fallback_transition(factory: BeatFactory, section_title: str) -> str
     boundary that never had one read identically -- a listener should not be able to hear which
     happened.
     """
-    return factory.speak(f"Still on {_spoken_title(section_title)}.")
+    # Closed explicitly, because this is assigned straight onto an existing beat's text and so
+    # never passes through :meth:`BeatFactory.make`. One corpus paper has a section titled
+    # "Available online at www.sciencedirect.com" -- the URL pattern is greedy over non-space
+    # and takes the sentence's full stop away with the address, leaving "Still on available
+    # online at" for the speech engine to run into whatever came next.
+    #
+    # The dangling preposition goes with it. The citation tidy-up already removes one before
+    # punctuation; here there is no punctuation left for it to look at.
+    said = re.sub(
+        r"\s+\b(?:in|to|by|at|of|from|for|with|on)\b\s*$",
+        "",
+        factory.speak(f"Still on {_spoken_title(section_title)}."),
+    )
+    return BeatFactory._closed(said)

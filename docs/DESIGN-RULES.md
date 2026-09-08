@@ -298,6 +298,12 @@ labels. *(KB §4.4; deterministic rules + classifier)*
 needed to interpret results (to a one-line summary), hedging chains ("may possibly suggest" → the
 claim plus one hedge), enumerated parameter settings. *(planner)*
 
+*A block with eight or more words and **no function word** is dropped under `COH-01` as well: a
+contents page, a figure's axis labels, a table of unit-cell parameters, journal front matter, or
+a heading whose letters were spaced out. The signal is grammar rather than digits -- a unit-cell
+table is only 20% numerals, so a numeric-density test misses it. Across 668 kept blocks from
+twelve papers this rejects 37, and every one of them is furniture.*
+
 **COH-03** No seductive details: no interesting-but-tangential asides, historical colour, or
 biographical trivia, even when present in the source. *(KB §3.4; prompt + lint on generated
 content)*

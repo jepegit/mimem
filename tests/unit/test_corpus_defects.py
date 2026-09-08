@@ -119,3 +119,79 @@ def test_an_acronym_ending_a_sentence_still_counts() -> None:
 def test_a_decimal_is_not_a_citation(text: str) -> None:
     """The point of a decimal is also a full stop to a regex; a letter in front tells them apart."""
     assert strip_superscript_citations(text) == text
+
+
+# -- a maths font mapped onto Icelandic letters -------------------------------------------------
+
+
+def test_the_ion_gets_its_charge_back() -> None:
+    """`Li/Liþ` is `Li/Li+`: an Elsevier maths font mis-mapped on the way out of the PDF."""
+    from mimem.clean.extraction import MATH_FONT
+
+    assert MATH_FONT[chr(0x00FE)] == "+"
+    assert MATH_FONT[chr(0x00F0)] == "("
+    assert MATH_FONT[chr(0x00DE)] == ")"
+
+
+def test_the_repair_waits_for_evidence() -> None:
+    """One thorn in a document is a name; a hundred against digits is a broken font.
+
+    Gated like the superscript-citation rule and for the same reason -- a repair that fires on
+    one ambiguous character is worse than one that waits for a pattern. Of twelve corpus papers,
+    three showed the pattern and one had a single legitimate thorn, which is left alone.
+    """
+    from mimem.clean.extraction import uses_broken_math_font
+    from mimem.ir import Block, BlockKind, BlockRole, Document, SourceMeta
+
+    def doc(text: str) -> Document:
+        return Document(
+            id="d",
+            source=SourceMeta(format="pdf"),
+            blocks=[Block(id="b1", kind=BlockKind.PARAGRAPH, role=BlockRole.BODY, text=text)],
+        )
+
+    broken = f"Li/Li{chr(0x00FE)} and Ni3{chr(0x00FE)} and Mn2{chr(0x00FE)} were measured"
+    assert uses_broken_math_font(doc(broken))
+    assert not uses_broken_math_font(doc("Halldór wrote það in Icelandic"))
+
+
+# -- blocks that are not prose ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "not_prose",
+    [
+        "Manuscript submitted September 9, 2003; revised manuscript received June 1",
+        "Li~1! 12a 0.375 0 0.25 Li~2! 48e 0.118~1! 0.156~1! 0.961~1! Si 16c 0.75",
+        "h i g h l i g h t s",
+        "Sample Ar flow rate (cc/min) Reaction yield (%) BET (m2/g) 1 2 3",
+        "0 600 1200 1800 2400 3000 3600 4200",
+        "Solar Energy Materials & Solar Cells 95 (2011) 3596-3599 journal homepage",
+    ],
+)
+def test_a_block_with_no_function_words_is_not_narrated(not_prose: str) -> None:
+    """Contents pages, axis labels, crystallographic tables and journal front matter.
+
+    The signal is function words rather than digits: a unit-cell table is only 20% numerals, so
+    a numeric-density test misses it, while what it shares with a 98%-full-stop contents page is
+    that nothing in either is doing grammatical work.
+    """
+    from mimem.triage.rules import reads_as_prose
+
+    assert not reads_as_prose(not_prose)
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "Although silicon has the highest theoretical specific energy density of any material",
+        "Structural Changes in Silicon Anodes during Lithium Insertion",
+        "XRD patterns were collected using a Siemens model Kristalloflex diffractometer",
+        "Nano Letters",
+        "We show that a paired reference resonator reproduces the thermal drift",
+    ],
+)
+def test_real_prose_and_short_headings_survive(prose: str) -> None:
+    from mimem.triage.rules import reads_as_prose
+
+    assert reads_as_prose(prose)

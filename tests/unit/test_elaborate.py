@@ -30,6 +30,7 @@ from mimem.ir import (
 )
 from mimem.lint import lint_script
 from mimem.llm import NullClient, ScriptedClient
+from mimem.llm.client import LLMUnavailableError
 from mimem.llm.cost import BudgetExceededError
 from mimem.plan import plan
 from mimem.render import render_audio, render_study
@@ -322,3 +323,69 @@ def test_a_dry_run_without_a_model_uses_the_default(sample_doc: Document, study:
     registry = build_registry(sample_doc, Listener())
     planned = plan_requests(sample_doc, registry, study, Listener())
     assert all(r.model == DEFAULT_MODEL for r in planned.requests)
+
+
+def test_the_chosen_model_reaches_the_request(sample_doc: Document, study: Profile) -> None:
+    """`--model` was accepted, ignored, and billed at the default's price.
+
+    `Request.model` carries `DEFAULT_MODEL`, and `AnthropicClient` resolves
+    `request.model or self.model` -- a default that is always truthy, so the client's own model
+    was never reached. One real run asked for Haiku, was answered by Opus, and cost $0.79
+    instead of about a tenth of that. The estimate is priced from `request.model` too, so this
+    is what makes the ledger true as well as the call.
+    """
+    seen: list[str] = []
+
+    class Watching:
+        def complete(self, request):  # type: ignore[no-untyped-def]
+            seen.append(request.model)
+            raise LLMUnavailableError("not answering, just watching")
+
+    registry = build_registry(sample_doc, Listener())
+    elaborate(
+        sample_doc,
+        registry,
+        study,
+        Listener(),
+        Watching(),  # type: ignore[arg-type]
+        model="claude-haiku-4-5-20251001",
+    )
+
+    assert seen, "the fixture must produce at least one request"
+    assert set(seen) == {"claude-haiku-4-5-20251001"}
+
+
+def test_without_a_model_the_default_is_used(sample_doc: Document, study: Profile) -> None:
+    from mimem.llm import DEFAULT_MODEL
+
+    seen: list[str] = []
+
+    class Watching:
+        def complete(self, request):  # type: ignore[no-untyped-def]
+            seen.append(request.model)
+            raise LLMUnavailableError("no")
+
+    registry = build_registry(sample_doc, Listener())
+    elaborate(sample_doc, registry, study, Listener(), Watching())  # type: ignore[arg-type]
+    assert set(seen) == {DEFAULT_MODEL}
+
+
+def test_progress_is_reported_for_every_call(sample_doc: Document, study: Profile) -> None:
+    """Twenty-six calls with no output looks exactly like a hang, which is how it was reported."""
+    seen: list[tuple[str, str]] = []
+
+    class Refusing:
+        def complete(self, request):  # type: ignore[no-untyped-def]
+            raise LLMUnavailableError("no")
+
+    registry = build_registry(sample_doc, Listener())
+    report = elaborate(
+        sample_doc,
+        registry,
+        study,
+        Listener(),
+        Refusing(),  # type: ignore[arg-type]
+        progress=lambda task, subject: seen.append((task, subject)),
+    )
+    assert len(seen) == sum(report.attempted.values())
+    assert all(task and subject for task, subject in seen)

@@ -44,8 +44,13 @@ ISBN = re.compile(r"\bISBN[- ]?(?:13|10)?:?\s*[\d-]{10,17}\b", re.I)
 #: half-eaten one is a number the listener will try to make sense of. ``\.\d`` requires a digit
 #: after the dot, so a reference ending a sentence ("in Figure 4. The next result...") still
 #: stops at the 4.
+#: The leading bracket and the ``see`` are one shape: "(see Figure 1a)". Without them the
+#: pattern started at "Figure" and left "(see " behind, which the punctuation tidy-up below then
+#: reduced to a sentence ending in the word "see" -- "the interlayer distance see." -- in every
+#: paper that uses the parenthetical aside, which is most of them.
 CROSS_REFERENCE = re.compile(
-    r"\b(?:as\s+)?(?:shown|seen|illustrated|summari[sz]ed|listed|given|presented|reported)?\s*"
+    r"\(?\s*\b(?:as\s+)?"
+    r"(?:see|shown|seen|illustrated|summari[sz]ed|listed|given|presented|reported)?\s*"
     r"\b(?:in|by)?\s*"
     r"\(?\b(?:Fig(?:ure|s?)?|Tables?|Schemes?|Eq(?:uation|s?)?|Sect(?:ion)?s?|Ref(?:s?|erence)?)\.?\s*"
     r"(?:S)?\d+(?:\.\d+)*[a-z]?(?:\s*(?:[-–,]|and)\s*(?:S)?\d+(?:\.\d+)*[a-z]?)*\)?",
@@ -149,7 +154,11 @@ def _attribute(match: re.Match[str]) -> str:
 #: -- the other two left a bare digit in the audio track, which is 68 of 154 ``NUM-02`` failures.
 _RUN = r"\d{1,3}(?:\s*[,–-]\s*\d{1,3}|\s+\d{1,3})*"
 
-_SUPERSCRIPT_AFTER_WORD = re.compile(rf"(?<=[a-z])({_RUN})(?=[\s.,;:)]|$)")
+#: The lookbehind admits ``Å`` and ``Ω`` beside the lower-case letters. They are unit symbols,
+#: they are the only capitals that are, and a marker welded to one -- "an expansion to ca. 4.15
+#: Å44 while the second causes" -- was reaching the audio as a quantity. Every other capital
+#: stays out, because a capital before a digit is a designation: ``NMC811``, ``LiFePO4``, ``H2O``.
+_SUPERSCRIPT_AFTER_WORD = re.compile(rf"(?<=[a-zÅΩ])({_RUN})(?=[\s.,;:)]|$)")
 
 #: The letter in the lookbehind is what keeps a decimal safe. ``(?<=[.!?])`` alone matches the
 #: "5 3" in "0.5 3 times", because the point of a decimal is also a full stop to a regex; a
@@ -160,25 +169,52 @@ _SUPERSCRIPT_AFTER_WORD = re.compile(rf"(?<=[a-z])({_RUN})(?=[\s.,;:)]|$)")
 #: citation, which is a sentence ending in exactly the way a chemistry paper's sentences do.
 #: It cost seventeen new failures on one paper and thirteen on another before the corpus run
 #: showed it.
-_SUPERSCRIPT_AFTER_STOP = re.compile(rf"(?<=[A-Za-z][.!?])({_RUN})(?=\s+[A-Z(]|$)")
+#: A marker is never followed by a letter, and that is the whole lookahead. The first version
+#: asked for a capital -- ``(?=\s+[A-Z(]|$)`` -- and so missed every marker that ends a clause
+#: rather than a sentence: "on the electrodes.52-55." is followed by its full stop, and
+#: "electrodes.52-55 in one line" continues in lower case. Both reached the audio.
+#:
+#: Dropping the lookahead altogether was the next version and it was worse: "LiNi.5Co.2Mn.3O2"
+#: is a letter, a stop and a run three times over, and the NMC-532 cathode lost its subscripts
+#: in the one paper that is *named* after it. A digit welded to the letter that follows it is a
+#: subscript; a marker always has whitespace or punctuation after it.
+#:
+#: What makes the rest safe is the *lookbehind*: a letter, a stop, and digits **with no space
+#: between them** is not a shape prose has. "Fig. 3" and "Ref. 12" have the space and never
+#: match; a decimal has a digit before its point and never matches either.
+#:
+#: The optional bracket or comma is for a marker that follows a parenthetical: "(LEDC).31" and
+#: "carbonates),.17" both put something between the last letter and the stop.
+_SUPERSCRIPT_AFTER_STOP = re.compile(
+    rf"(?:(?<=[A-Za-z][.!?])|(?<=[A-Za-z][)\],][.!?]))({_RUN})(?![A-Za-z])"
+)
 
 #: Below this many markers, the pattern is more likely to be data than a citation style.
 MIN_SUPERSCRIPT_EVIDENCE = 10
 
-_WORD_BEFORE = re.compile(r"([A-Za-z]+)$")
+_WORD_BEFORE = re.compile(r"([A-Za-zΩµμÅ]+)$")
 
 
 def count_superscript_citations(text: str) -> int:
     """How many superscript reference markers this text appears to contain."""
     return len(_SUPERSCRIPT_AFTER_STOP.findall(text)) + sum(
-        1 for m in _SUPERSCRIPT_AFTER_WORD.finditer(text) if not _preceded_by_unit(text, m.start())
+        1 for m in _SUPERSCRIPT_AFTER_WORD.finditer(text) if not _is_unit_exponent(text, m)
     )
 
 
-def _preceded_by_unit(text: str, index: int) -> bool:
-    from mimem.verbalize.units import is_unit
+def _is_unit_exponent(text: str, match: re.Match[str]) -> bool:
+    """Is this run the exponent of the unit in front of it, rather than a reference marker?
 
-    word = _WORD_BEFORE.search(text[:index])
+    Two conditions, and the second is what was missing. ``cm2`` is square centimetres, so the
+    word in front must be a unit -- but ``Å44`` is angstroms *and a citation*, because a unit
+    exponent is a single digit. Nothing is raised to the forty-fourth power in a battery paper.
+    """
+    from mimem.verbalize.units import MAX_UNIT_EXPONENT, is_unit
+
+    run = match.group(1)
+    if not run.isdigit() or len(run) > 1 or int(run) > MAX_UNIT_EXPONENT:
+        return False
+    word = _WORD_BEFORE.search(text[: match.start()])
     return bool(word and is_unit(word.group(1)))
 
 
@@ -191,7 +227,7 @@ def strip_superscript_citations(text: str) -> str:
     """
     text = _SUPERSCRIPT_AFTER_STOP.sub("", text)
     return _SUPERSCRIPT_AFTER_WORD.sub(
-        lambda m: "" if not _preceded_by_unit(text, m.start()) else m.group(0), text
+        lambda m: m.group(0) if _is_unit_exponent(text, m) else "", text
     )
 
 
@@ -255,6 +291,18 @@ def verbalize_citations(
     # A removal at the start of a sentence leaves the comma that separated it from the rest.
     text = re.sub(r"^\s*,\s*", "", text)
     text = re.sub(r"([.!?])\s*,\s*", r"\1 ", text)
+    if strip_superscripts:
+        # **A second pass, deliberately.** Deleting a cross-reference exposes markers the first
+        # pass could not see: "(see Figure 5).54" has a bracket where the sentence's last letter
+        # should be, and only becomes "electrodes.54" once the reference is gone and the space
+        # it left has been closed up -- which is why this sits after the tidy-up and not beside
+        # the deletion that caused it.
+        #
+        # The earlier pass is not thereby redundant: the lower-case guard in
+        # :data:`_SUPERSCRIPT_AFTER_WORD` has to see the text before "et al." becomes "and
+        # colleagues", or the marker in "Heimes et al.24" loses the letter in front of it.
+        text = strip_superscript_citations(text)
+
     text = _recapitalise(text, original)
     text = re.sub(r"([(\[])\s+", r"\1", text)
     text = re.sub(r"\s{2,}", " ", text)

@@ -267,3 +267,103 @@ def test_the_second_repair_still_knows_after_the_first_erased_the_evidence() -> 
     assert repair_math_font(doc) > 0
     assert thorn not in doc.blocks[0].text, "the evidence is gone"
     assert has_broken_math_font(doc), "and the document still knows"
+
+
+# -- reference markers the stripper walked past ------------------------------------------------
+#
+# All five shapes below reached the audio track of a real paper as bare numbers, and all five
+# came from a document ``uses_superscript_citations`` had already recognised: the paper was
+# known to cite this way, and the markers were left in anyway.
+
+
+def _spoken(text: str) -> str:
+    return verbalize_text(text, load_profile("study"), Listener(), strip_superscripts=True)
+
+
+@pytest.mark.parametrize(
+    ("written", "spoken"),
+    [
+        # A marker at the end of a clause rather than a sentence: a full stop follows it, not a
+        # capital letter. Webb et al.
+        (
+            "lithiation of native oxide layer on the electrodes.52-55.",
+            "lithiation of native oxide layer on the electrodes.",
+        ),
+        # ...or a lower-case word.
+        (
+            "oxide layer on the electrodes.52-55 in one line",
+            "oxide layer on the electrodes. In one line",
+        ),
+        # A marker welded to a unit symbol. Two digits, so it is not an exponent. Irisarri et al.
+        (
+            "sheets from 3.8 Å to ca. 4.15 Å44 while the second",
+            "sheets from three point eight angstroms to ca. four point one five angstroms "
+            "while the second",
+        ),
+        # A marker after a closing bracket. Nie and Lucht, four times over.
+        (
+            "lithium ethylene dicarbonate (LEDC).31 The SEI predominantly contains",
+            "lithium ethylene dicarbonate, or LEDC. The SEI predominantly contains",
+        ),
+        # A marker after a parenthetical cross-reference, which only becomes visible once the
+        # reference is deleted and the space it left behind has been closed up.
+        (
+            "are similar to those of fresh electrodes (see Figure 5).54 Such findings",
+            "are similar to those of fresh electrodes. Such findings",
+        ),
+    ],
+)
+def test_a_reference_marker_does_not_reach_the_audio(written: str, spoken: str) -> None:
+    assert _spoken(written) == spoken
+
+
+@pytest.mark.parametrize(
+    ("written", "spoken"),
+    [
+        # A unit exponent is a single digit, and stays one.
+        ("an area of 12 cm2", "an area of twelve square centimetres"),
+        ("a volume of 4 cm3", "a volume of four cubic centimetres"),
+        # A designation is not a citation, whatever follows it.
+        ("the cathode NMC811", "the cathode NMC eight one one"),
+        ("the salt LiFePO4", "the salt LiFePO four"),
+        # A cross-reference has a space in it and a marker never does, which is the whole reason
+        # the lookahead could be dropped from the after-a-stop pattern.
+        ("Fig. 3 shows it again.", "The figure shows it again."),
+        # A decimal point is a full stop to a regex, but it has a digit in front of it.
+        ("a capacity of 0.5 3 times over", "a capacity of zero point five three times over"),
+        # The subscripts of a non-stoichiometric formula. "LiNi." is a letter and a stop and
+        # "5" is a run, so dropping the lookahead from the after-a-stop pattern ate all three
+        # -- in the one corpus paper that is named after this cathode. A digit welded to the
+        # letter that follows it is a subscript, never a marker.
+        (
+            "a full cell of LiNi.5Co.2Mn.3O2 and silicon-graphite",
+            "a full cell of lithium nickel zero point five cobalt zero point two manganese "
+            "zero point three oxygen two and silicon-graphite",
+        ),
+    ],
+)
+def test_a_number_that_is_not_a_reference_marker_survives(written: str, spoken: str) -> None:
+    assert _spoken(written) == spoken
+
+
+def test_a_parenthetical_cross_reference_takes_its_bracket_with_it() -> None:
+    """ "(see Figure 1a)" left the word "see" behind, and a sentence ended on it.
+
+    The pattern began at "Figure", so the deletion left "(see " for the punctuation tidy-up to
+    reduce to "the interlayer distance see." -- in every paper that uses the parenthetical
+    aside, which is most of them.
+    """
+    from mimem.verbalize.citations import verbalize_citations
+
+    assert (
+        verbalize_citations("the interlayer distance (see Figure 1a). If crosslinking")
+        == "the interlayer distance. If crosslinking"
+    )
+
+
+def test_a_marker_is_still_only_stripped_where_the_paper_cites_that_way() -> None:
+    """The gate has not moved: one stray digit after a word is a typo, not a house style."""
+    from mimem.verbalize.citations import MIN_SUPERSCRIPT_EVIDENCE, count_superscript_citations
+
+    assert count_superscript_citations("we measured conditions4 and stopped") == 1
+    assert MIN_SUPERSCRIPT_EVIDENCE > 1

@@ -22,7 +22,7 @@ rule ``VOI-02`` makes the planner introduce them as ours when they are spoken.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -168,11 +168,19 @@ def plan_requests(
     registry: ConceptRegistry,
     profile: Profile,
     listener: Listener | None = None,
+    model: str | None = None,
 ) -> Plan:
-    """Every call this run would make, without making any of them (the ``--dry-run`` report)."""
+    """Every call this run would make, without making any of them (the ``--dry-run`` report).
+
+    ``model`` is what the estimate is priced against, and it was missing. ``--dry-run --model``
+    quoted the default model's price whatever you asked for, so the one question a dry run
+    exists to answer -- *what will the cheap model save me?* -- returned the same number for
+    Opus, Sonnet and Haiku. On a 98-page review that was $2.48 three times over for prices that
+    differ by nearly twenty-fold.
+    """
     plan = Plan()
     for request in _requests(doc, registry, profile, listener):
-        plan.add(request)
+        plan.add(replace(request, model=model) if model else request)
     return plan
 
 

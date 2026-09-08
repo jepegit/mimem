@@ -417,7 +417,7 @@ def elaborate(
     registry = _load_or_build_registry(doc, registry_file, ir, listener)
 
     if dry_run:
-        planned = plan_requests(doc, registry, profile, listener)
+        planned = plan_requests(doc, registry, profile, listener, model)
         console.print(planned.report())
         console.print(planned.report(batch=True), style="dim")
         return

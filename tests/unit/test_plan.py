@@ -346,3 +346,32 @@ def test_a_fallback_transition_ends_on_a_sentence_boundary(study_profile: Profil
     factory = BeatFactory(study_profile)
     for title in ("Available online at www.sciencedirect.com", "Results and discussion", ""):
         assert section_fallback_transition(factory, title).endswith(".")
+
+
+def test_no_two_cards_answer_with_the_same_sentence(interphase_script: Script) -> None:
+    """Rule RET-06, and the half of it the planner was not keeping.
+
+    The section-closing cards already avoided sharing, through ``_unshared_support``. The segment
+    prompts drew through ``SupportPool.take``, whose ledger is keyed per *concept* -- right for
+    exposition, where one sentence can reasonably serve two ideas, and wrong for a question. So a
+    sentence already answering one was free to answer another: forty-two warnings across the
+    twelve-paper stress corpus, each one two prompts and a single fact between them.
+    """
+    spans = [
+        (s.block_id, s.char_start, s.char_end)
+        for card in interphase_script.cards
+        for s in card.spans
+    ]
+    assert len(spans) == len(set(spans)), "two cards are answering with the same sentence"
+
+
+def test_a_segment_prompt_is_dropped_rather_than_answered_with_a_borrowed_sentence(
+    interphase_script: Script,
+) -> None:
+    """The alternative was to ask anyway. A question whose answer the listener has already been
+    given as the answer to a different question is retrieval practice spent without being had.
+    """
+    prompts = [b for b in interphase_script.beats() if b.type is BeatType.PROMPT]
+    assert prompts, "the fixture should still place prompts"
+    answers = [b for b in interphase_script.beats() if b.type is BeatType.ANSWER]
+    assert len(answers) == len(prompts)

@@ -733,6 +733,22 @@ def _close_prequestions(ctx: _Context, script: Script, prequestion_ids: set[str]
             )
 
 
+#: How many supports to pass over before giving up on a segment prompt. A concept with three
+#: sentences about it and two of them already spent as answers elsewhere should still get asked;
+#: a concept with nothing unshared left should not be asked twice with one fact.
+MAX_SUPPORT_TRIES = 4
+
+
+def _answered(script: Script) -> set[tuple[str, int, int]]:
+    """The source sentences already serving as some card's answer (rule RET-06).
+
+    Compared by span rather than by text: two cards sharing a sentence share its location, and
+    the answers themselves differ by construction -- each opens on a lead carrying its own
+    subject's name, which is why comparing whole answers reports nothing.
+    """
+    return {(s.block_id, s.char_start, s.char_end) for card in script.cards for s in card.spans}
+
+
 def _add_segment_prompts(ctx: _Context, script: Script) -> None:
     """Rule RET-03: up to one retrieval prompt per segment, where there is one to ask.
 
@@ -750,6 +766,7 @@ def _add_segment_prompts(ctx: _Context, script: Script) -> None:
     budget = script.budget_seconds
     running = script.est_seconds
 
+    answered = _answered(script)
     for section in script.sections:
         for segment in section.segments:
             if segment.has(BeatType.PROMPT) or running >= budget:
@@ -761,9 +778,25 @@ def _add_segment_prompts(ctx: _Context, script: Script) -> None:
                 concept = ctx.registry.concepts.get(concept_id)
                 if concept is None:
                     continue
-                support = ctx.support.take(concept_id)
+                # Rule RET-06: not a sentence some other card is already answering with.
+                # ``SupportPool`` keys its ledger per concept, which is right for exposition --
+                # one sentence can reasonably serve two ideas -- and wrong for a question. On
+                # the corpus this was forty-two warnings: two prompts, one fact, and retrieval
+                # practice spent without being had.
+                support = None
+                for _ in range(MAX_SUPPORT_TRIES):
+                    candidate = ctx.support.take(concept_id)
+                    if candidate is None:
+                        break
+                    span = candidate.span
+                    if (span.block_id, span.char_start, span.char_end) not in answered:
+                        support = candidate
+                        break
                 if support is None:
                     continue
+                answered.add(
+                    (support.span.block_id, support.span.char_start, support.span.char_end)
+                )
                 card = make.make_card(concept, support, segment.section_id, ctx.factory)
                 beats = make.prompt_beats(ctx.factory, card)
                 cost = sum(b.total_seconds for b in beats)

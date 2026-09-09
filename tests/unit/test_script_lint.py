@@ -378,17 +378,19 @@ PREPARE: dict[str, Mutator] = {"TBL-02": _add_a_table, "FIG-01": _add_a_figure}
 #: This exists so that "known defect" is tracked rather than hidden. The clean-plan test asserts
 #: these rules *do* fire, so the day the planner is fixed the entry fails and has to be removed.
 #: A skip would have rotted silently.
-KNOWN_FINDINGS: dict[str, str] = {
-    "RET-06": (
-        "a section whose concept has only one usable sentence still shares it; the planner "
-        "prefers an unshared sentence and falls back rather than losing the section's question"
-    ),
-}
+KNOWN_FINDINGS: dict[str, str] = {}
 
 #: ``STR-09`` was here and is gone, which is the mechanism working. It was replaced by
 #: ``SEG-04`` when the evidence turned out to be about broken promises rather than thin text,
 #: and the planner was then fixed so that ``SEG-04`` passes on the clean plan. An entry that
 #: stops firing fails this test and has to be removed, which is how it left.
+#:
+#: ``RET-06`` left the same way. It was here because "a section whose concept has only one
+#: usable sentence still shares it; the planner prefers an unshared sentence and falls back
+#: rather than losing the section's question" -- which was true of the section-closing cards and
+#: said nothing about the segment prompts, where the sharing actually came from. Those drew
+#: through ``SupportPool.take``, whose ledger is keyed per concept, so a sentence already
+#: answering one question was free to answer another. Forty-two warnings on the stress corpus.
 
 
 @pytest.mark.parametrize(("rule_id", "mutate"), CASES, ids=IDS)

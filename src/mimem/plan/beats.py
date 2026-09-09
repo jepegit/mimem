@@ -187,7 +187,11 @@ def exposition_beats(
         if not batch:
             return
         start, end = batch[0][0], batch[-1][1]
-        raw = block.text[start:end].strip()
+        # Per sentence, not over the whole batch: a beat covers several, and stage 6 splits one
+        # at a time (rule SENT-01). Where it has, the split is what gets spoken; the span still
+        # covers the source, which is what rule GRD-02 checks the beat against and what
+        # ``study.md`` shows a reader who wants to know what the paper actually said.
+        raw = " ".join(block.spoken_text(a, b).strip() for a, b in batch).strip()
         spoken = factory.speak(raw)
         if spoken:
             out.append(

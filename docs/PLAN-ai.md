@@ -31,7 +31,7 @@ feature nobody can turn on.
 
 | Where | What the model does | Provider | Ever run? |
 |---|---|---|---|
-| Stage 6, `elaborate` | gloss, anchor, analogy, why, compress | Anthropic only | **No** |
+| Stage 6, `elaborate` | gloss, anchor, analogy, why, compress, split | Anthropic only | **No** |
 | Stage 6, figures | describe a rendered crop | Anthropic only | **No** |
 | Stage 6, gate | entailment check (`GRD-02`) | Anthropic only | **No** |
 | MCP assistant | *all of the above*, written in the conversation | none needed | **Yes** |
@@ -60,7 +60,7 @@ should stop treating them as one thing.
 
 **Author.** The model produces text that reaches the listener. Highest risk — a fluent wrong
 sentence is the worst output this system can make — and every output must pass the grounding
-gate. Currently: gloss, anchor, analogy, why, compress, figure.
+gate. Currently: gloss, anchor, analogy, why, compress, figure, split.
 
 **Critic.** The model reads output the deterministic pipeline produced and says what is wrong
 with it. Low risk: its output is a report, not a script, and a wrong criticism costs a human

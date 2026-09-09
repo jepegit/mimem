@@ -104,6 +104,15 @@ class ElaborationBudget(BaseModel):
     max_anchors: int = 4
     anchor_min_abstractness: float = 0.50
 
+    #: Sentences to split in one build (rule SENT-01), longest first.
+    #:
+    #: A cap on *calls*, unlike everything above it, and it has to be: the others scale with the
+    #: number of concepts a paper has and this one scales with the paper. A ninety-eight page
+    #: review offers well over a thousand sentences past the cap, and splitting all of them would
+    #: cost more than every other task in this file put together while the four analogies that
+    #: carry the programme went unwritten.
+    max_splits: int = 40
+
     #: Which implementation answers each task: ``off``, ``assist`` or ``prefer``. See
     #: :mod:`mimem.elaborate.reconcile`.
     #:
@@ -121,7 +130,7 @@ class ElaborationBudget(BaseModel):
     #: keep a paid run away from it entirely.
     modes: dict[str, str] = Field(
         default_factory=lambda: dict.fromkeys(
-            ("gloss", "anchor", "analogy", "why", "figure", "compress"), "prefer"
+            ("gloss", "anchor", "analogy", "why", "figure", "compress", "split"), "prefer"
         )
     )
 

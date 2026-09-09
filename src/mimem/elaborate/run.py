@@ -31,9 +31,11 @@ from pydantic import BaseModel
 
 from mimem.config import Listener, Profile
 from mimem.elaborate.reconcile import Absence, Deterministic, Mode, classify
+from mimem.elaborate.sentences import LongSentence, over_long, verify_split
 from mimem.ir import (
     Analogy,
     Anchor,
+    Block,
     Concept,
     ConceptRegistry,
     Document,
@@ -44,7 +46,7 @@ from mimem.llm import tasks
 from mimem.llm.cache import CacheStats
 from mimem.llm.client import Client, LLMRefusedError, LLMUnavailableError, NullClient, Request
 from mimem.llm.cost import BudgetExceededError, Ledger, Plan, estimate
-from mimem.llm.schemas import AnalogyOut, AnchorOut, FigureOut, GlossOut, WhyOut
+from mimem.llm.schemas import AnalogyOut, AnchorOut, FigureOut, GlossOut, SplitOut, WhyOut
 
 # The supporting-sentence index is shared between stage 6 and stage 7. It lives with the
 # planner, which is its heavier user; importing it here is deliberate rather than a layering
@@ -57,8 +59,14 @@ from mimem.verify.grounding import Finding
 #: need to: the task carries the sentences that matter, and the document is context.
 MAX_DOCUMENT_CHARS = 60_000
 
+#: The cap the split is asked to get under, and it is *below* the linter's thirty-five. A
+#: sentence that lands exactly on the limit written is over it spoken, because the numbers in it
+#: have not been said yet -- see :func:`~mimem.elaborate.sentences.over_long`. Asking for
+#: twenty-five leaves room for the verbalizer.
+SPLIT_CAP = 25
+
 #: Every task that can be reconciled, so a mode exists for each.
-TASKS = ("gloss", "anchor", "analogy", "why", "figure", "compress")
+TASKS = ("gloss", "anchor", "analogy", "why", "figure", "compress", "split")
 
 
 @dataclass(frozen=True)
@@ -217,6 +225,12 @@ def _requests(
     for task in figure_tasks(doc):
         yield tasks.figure(task.caption, task.references, document)
 
+    # Sentence splits, which are the one task whose count scales with the length of the paper
+    # rather than with the number of concepts -- so a dry run that did not price them was
+    # quoting for the wrong build on anything longer than a letter.
+    for sentence in over_long(doc, profile, listener)[: profile.elaboration.max_splits]:
+        yield tasks.split(sentence.text, document, SPLIT_CAP)
+
 
 def elaborate(
     doc: Document,
@@ -275,7 +289,7 @@ def elaborate(
                 report,
                 client,
                 tasks.gloss(concept, support, document, listener),
-                concept,
+                concept.canonical,
                 partial(_apply_gloss, concept),
                 source=source,
                 fallback="the source's own definitional sentence",
@@ -289,7 +303,7 @@ def elaborate(
                 report,
                 client,
                 tasks.anchor(concept, support, document, listener),
-                concept,
+                concept.canonical,
                 partial(_apply_anchor, concept),
                 source=source,
                 kinds=GROUNDING_KINDS["anchor"],
@@ -303,7 +317,7 @@ def elaborate(
                 report,
                 client,
                 tasks.why(concept, support, document),
-                concept,
+                concept.canonical,
                 partial(_apply_why, concept, spans),
                 source=source,
                 fallback="no why-explanation",
@@ -320,7 +334,7 @@ def elaborate(
             report,
             client,
             tasks.analogy(concept, support, document, listener),
-            concept,
+            concept.canonical,
             partial(_apply_analogy, concept),
             source="\n".join(support),
             kinds=GROUNDING_KINDS["analogy"],
@@ -331,7 +345,67 @@ def elaborate(
         )
 
     _describe_figures(report, client, doc, document, out_dir, model=model, progress=progress)
+    _split_sentences(
+        report,
+        client,
+        doc,
+        document,
+        profile,
+        listener,
+        mode=modes["split"],
+        model=model,
+        progress=progress,
+    )
     return report
+
+
+def _split_sentences(
+    report: ElaborationReport,
+    client: Client,
+    doc: Document,
+    document: str,
+    profile: Profile,
+    listener: Listener | None,
+    *,
+    mode: Mode,
+    model: str | None,
+    progress: Callable[[str, str], None] | None,
+) -> None:
+    """Cut the sentences a listener cannot hold in one piece (rule SENT-01).
+
+    Last, and deliberately. Every other task competes for the elaboration budget against the
+    *concepts* rule DIF-02 ranks; this one competes against the length of the paper, and a
+    hundred splits would starve the four analogies that carry the programme. Running it after
+    the others means the budget answers the question in the right order.
+    """
+    if mode is Mode.OFF:
+        return
+    for sentence in over_long(doc, profile, listener)[: profile.elaboration.max_splits]:
+        block = doc.block(sentence.block_id)
+        _run(
+            report,
+            client,
+            tasks.split(sentence.text, document, SPLIT_CAP),
+            _shorten(sentence.text),
+            partial(_apply_split, block, sentence),
+            source=sentence.text,
+            inspect=lambda data, source: verify_split(source, list(data.sentences), cap=SPLIT_CAP),
+            fallback="the source sentence, unchanged",
+            model=model,
+            progress=progress,
+            mode=mode,
+        )
+
+
+def _shorten(text: str, words: int = 6) -> str:
+    """A sentence named by its opening, for the progress line and the degradation report."""
+    head = text.split()[:words]
+    return " ".join(head) + ("..." if len(text.split()) > words else "")
+
+
+def _apply_split(block: Block, sentence: LongSentence, out: SplitOut) -> None:
+    """Store the split beside the sentence it replaces, leaving the source alone."""
+    block.rewrites[sentence.key] = " ".join(s.strip() for s in out.sentences)
 
 
 def _describe_figures(
@@ -401,12 +475,13 @@ def _run(
     report: ElaborationReport,
     client: Client,
     request: Request,
-    concept: Concept,
+    subject: str,
     apply: Callable[[Any], None],
     *,
     source: str,
     fallback: str,
     kinds: tuple[str, ...] = ("number", "year", "name", "direction"),
+    inspect: Callable[[Any, str], list[Finding]] | None = None,
     on_degrade: Deterministic | None = None,
     mode: Mode = Mode.PREFER,
     model: str | None = None,
@@ -418,6 +493,13 @@ def _run(
     failure -- and under ``assist`` it runs *first*, which is the whole point of the mode: the
     rules answer what they are good at, and the model is asked only about the rest. It returns
     whether it produced anything, because nothing else can tell the caller that.
+
+    ``inspect`` replaces the grounding check for a task whose contract is different. Everything
+    here writes *new* text and can only be asked whether it invented something; a sentence split
+    is lossless, so it is also asked whether it lost something, which no other task can fail.
+
+    ``subject`` is a name for the thing being worked on, for the progress line and the
+    degradation report. It was a whole :class:`Concept` until the split arrived, which has none.
     """
     deterministic = on_degrade
 
@@ -436,7 +518,7 @@ def _run(
     if model:
         request = replace(request, model=model)
     if progress is not None:
-        progress(request.task, concept.canonical)
+        progress(request.task, subject)
 
     report._count(report.attempted, request.task)
     try:
@@ -445,19 +527,23 @@ def _run(
     except BudgetExceededError:
         raise
     except (LLMUnavailableError, LLMRefusedError) as exc:
-        _degrade(report, request.task, concept.canonical, str(exc), fallback, classify(exc))
+        _degrade(report, request.task, subject, str(exc), fallback, classify(exc))
         if deterministic is not None and deterministic():
             report._count(report.deterministic, request.task)
         return
 
     report.ledger.record(response)
-    findings = ground(response.data, source, kinds=kinds)
+    findings = (
+        inspect(response.data, source)
+        if inspect is not None
+        else ground(response.data, source, kinds=kinds)
+    )
     if findings:
         report.rejected.extend(findings)
         _degrade(
             report,
             request.task,
-            concept.canonical,
+            subject,
             "; ".join(str(f) for f in findings[:3]),
             fallback,
             Absence.REJECTED,

@@ -175,6 +175,12 @@ class Block(Base):
     triage: TriageDecision | None = None  # filled by stage 3
     attrs: dict[str, Any] = Field(default_factory=dict)
 
+    #: Sentences stage 6 split, keyed ``"start:end"`` by the offsets of the sentence they
+    #: replace (rule SENT-01). The *source* is never edited: a span still points at what the
+    #: paper wrote, which is what makes the rewrite checkable and what rule GRD-02 asks for.
+    #: What changes is only what gets spoken.
+    rewrites: dict[str, str] = Field(default_factory=dict)
+
     @property
     def is_empty(self) -> bool:
         return not self.text.strip()
@@ -185,6 +191,10 @@ class Block(Base):
 
     def sentence_texts(self) -> list[str]:
         return [self.text[a:b] for a, b in self.sentences]
+
+    def spoken_text(self, start: int, end: int) -> str:
+        """What the programme says for this span: the split, where there is one."""
+        return self.rewrites.get(f"{start}:{end}") or self.text[start:end]
 
 
 class DiagnosticLevel(StrEnum):

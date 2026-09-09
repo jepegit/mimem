@@ -80,9 +80,19 @@ _BOILERPLATE_HINT = re.compile(
 
 _LEADING_NUMBER = re.compile(r"^\s*(?:\d+(?:\.\d+)*|[IVXLC]+)[.)]?\s+")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+#: ``A/S`` is the Norwegian limited-company suffix, and it is spelled in capitals. Written
+#: ``a/?s`` under ``re.I`` alongside everything else it matched the English word **as**, so any
+#: front-matter block containing it was an affiliation -- including one paper's title, "Aluminum
+#: hydride *as* a hydrogen and energy storage material". Triage then dropped the title as
+#: content-free while the orientation went on saying it, which is what rule ``STR-01`` asks for
+#: and what ``COH-01`` then reported as a leak.
 _AFFILIATION_HINT = re.compile(
     r"\b(university|universitet|institute|institutt|department|dept\.|laborator|college|"
-    r"school of|centre|center|academy|hospital|gmbh|inc\.|ltd|a/?s|norway|sweden|denmark)\b",
+    r"school of|centre|center|academy|hospital|gmbh|ltd|(?-i:A/?S)|"
+    # No full stop on these two: the pattern ends in a word boundary, and there is none
+    # between "Dept." and the space after it, so both alternatives never matched anything.
+    r"dept|inc|"
+    r"norway|sweden|denmark)\b",
     re.I,
 )
 #: A reference entry needs *both* a list marker and a bibliographic signal. Requiring only the

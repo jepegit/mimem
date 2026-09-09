@@ -220,3 +220,30 @@ def test_only_headings_are_split() -> None:
         ],
     )
     assert len(split_stacked_headings(doc).blocks) == 1
+
+
+def test_the_norwegian_company_suffix_is_not_the_english_word_as() -> None:
+    """``a/?s`` under ``re.I``, alongside "university" and "institute", matched **as**.
+
+    Any front-matter block containing that word was called an affiliation -- including one
+    paper's title, "Aluminum hydride *as* a hydrogen and energy storage material". Triage then
+    dropped the title as content-free while the orientation went on saying it, which is what
+    rule STR-01 asks for and what COH-01 then reported as a leak.
+    """
+    from mimem.clean.sections import _AFFILIATION_HINT
+
+    assert not _AFFILIATION_HINT.search("Aluminum hydride as a hydrogen storage material")
+    assert not _AFFILIATION_HINT.search("the capacity as measured after cycling")
+    assert _AFFILIATION_HINT.search("Elkem AS, Kristiansand")
+    assert _AFFILIATION_HINT.search("Institutt for energiteknikk, Kjeller")
+
+
+def test_two_hints_that_a_full_stop_had_made_unreachable() -> None:
+    """The pattern ends in a word boundary, and there is none between "Dept." and the space."""
+    from mimem.clean.sections import _AFFILIATION_HINT
+
+    assert _AFFILIATION_HINT.search("Dept. of Chemistry, Uppsala")
+    assert _AFFILIATION_HINT.search("Elkem Inc., Pittsburgh")
+    # ...without swallowing the ordinary words they are prefixes of.
+    assert not _AFFILIATION_HINT.search("we incorporated the binder")
+    assert not _AFFILIATION_HINT.search("the incident light was filtered")

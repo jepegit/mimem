@@ -506,3 +506,39 @@ def test_a_marker_after_a_quotation_mark() -> None:
 )
 def test_a_designation_may_have_a_decimal_point_in_its_name(written: str, spoken: str) -> None:
     assert _spoken(written) == spoken
+
+
+# -- the last three ----------------------------------------------------------------------------
+
+
+def test_a_marker_after_more_than_one_closing_bracket() -> None:
+    """Parentheticals nest, and matching a single closing bracket was still one short.
+
+    "...5 wt% of Super P carbon (Tim-cal) in N-Methylpyrrolidone (Aldrich)).19 Electrochemical
+    tests were performed..." -- two brackets close at once between the sentence's last letter
+    and its full stop.
+    """
+    written = "in N-Methylpyrrolidone (Aldrich)).19 Electrochemical tests were performed"
+    assert strip_superscript_citations(written) == (
+        "in N-Methylpyrrolidone (Aldrich)). Electrochemical tests were performed"
+    )
+
+
+@pytest.mark.parametrize(
+    ("written", "spoken"),
+    [
+        # A hydrate is written with the water or the ether welded to the stoichiometry, and the
+        # designation pattern refused to begin on a token with a digit in front of it -- so the
+        # plain pass said "zero point two five" and left the ether spelled out as a number.
+        (
+            "a composition close to AlH3·0.25Et2O and although it is amorphous",
+            "a composition close to AlH three times zero point two five Et two O "
+            "and although it is amorphous",
+        ),
+        # The leftmost match still wins, so a coefficient in front is claimed with the token.
+        ("4AlH3 was distilled off", "four AlH three was distilled off"),
+        ("3LiH and AlCl3 react", "three LiH and AlCl three react"),
+    ],
+)
+def test_a_designation_may_begin_where_a_number_ends(written: str, spoken: str) -> None:
+    assert _spoken(written) == spoken

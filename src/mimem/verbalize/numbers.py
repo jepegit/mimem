@@ -258,7 +258,13 @@ class NumberVerbalizer:
                 # at all and "1.5" reached the audio as a bare number. The plain pass could not
                 # take it either: it will not start on a digit that follows a letter.
                 re.compile(
-                    r"(?<![\w.])(?P<token>(?=\w*[A-Za-z])(?=\w*\d)[A-Za-z0-9]+(?:\.\d+)?)"
+                    # ...or straight after a number, when a letter starts the token. A hydrate
+                    # is written that way -- "AlH3\u00b70.25Et2O" -- and the lookbehind refused
+                    # to begin on "Et2O" because a digit was in front of it, so the plain pass
+                    # said "zero point two five" and left the ether spelled out as a number.
+                    # The leftmost match still wins, so "4AlH3" is claimed whole as before.
+                    r"(?:(?<![\w.])|(?<=\d)(?=[A-Za-z]))"
+                    r"(?P<token>(?=\w*[A-Za-z])(?=\w*\d)[A-Za-z0-9]+(?:\.\d+)?)"
                     r"(?!\w)(?!\.\d)"
                 ),
                 "designation",

@@ -201,11 +201,16 @@ _SUPERSCRIPT_AFTER_WORD = re.compile(rf"(?<=[a-zÅΩ])({_RUN})(?=[\s.,;:)]|$)")
 #: between them** is not a shape prose has. "Fig. 3" and "Ref. 12" have the space and never
 #: match; a decimal has a digit before its point and never matches either.
 #:
-#: The optional bracket, comma or quotation mark is for a marker that follows a parenthetical
-#: or a quotation: "(LEDC).31", "carbonates),.17" and a simplified "falling cards model".25 all
-#: put something between the last letter and the stop.
+#: The brackets, commas and quotation marks are for a marker that follows a parenthetical or a
+#: quotation: "(LEDC).31", "carbonates),.17" and a simplified "falling cards model".25 all put
+#: something between the last letter and the stop. It is a *run*, because parentheticals nest:
+#: "in N-Methylpyrrolidone (Aldrich)).19" closes two of them at once, and matching a single one
+#: was still one short.
+#:
+#: They are consumed and put back rather than looked behind, because a lookbehind in Python has
+#: to be a fixed width and a run of them is not.
 _SUPERSCRIPT_AFTER_STOP = re.compile(
-    rf"(?:(?<=[A-Za-z][.!?])|(?<=[A-Za-z][)\],\"'”’][.!?]))({_RUN})(?![A-Za-z])"
+    rf"(?P<before>[A-Za-z][)\],\"'”’]*[.!?])(?P<run>{_RUN})(?![A-Za-z])"
 )
 
 #: Below this many markers, the pattern is more likely to be data than a citation style.
@@ -263,7 +268,7 @@ def strip_superscript_citations(text: str) -> str:
     :data:`MIN_SUPERSCRIPT_EVIDENCE`. A single stray digit after a word is far more likely to be
     a typo or a variable than a citation, and deleting it would be silent corruption.
     """
-    text = _SUPERSCRIPT_AFTER_STOP.sub("", text)
+    text = _SUPERSCRIPT_AFTER_STOP.sub(r"\g<before>", text)
     return _SUPERSCRIPT_AFTER_WORD.sub(
         lambda m: (
             m.group(0) if _is_unit_exponent(text, m) or _is_formula_subscript(text, m) else ""

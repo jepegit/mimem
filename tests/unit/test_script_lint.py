@@ -20,7 +20,7 @@ from collections.abc import Callable
 import pytest
 
 from mimem.config import Profile
-from mimem.ir import Analogy, Anchor, Beat, BeatType, Script, Span, beat_id
+from mimem.ir import TEACHING_TYPES, Analogy, Anchor, Beat, BeatType, Script, Span, beat_id
 from mimem.lint.script_rules import ScriptRule, script_rules
 
 Mutator = Callable[[Script], None]
@@ -80,8 +80,23 @@ def _overload_new_terms(script: Script) -> None:
     Spread over two beats on purpose. One beat carrying five new terms is a property of the
     source and the rule reports it as a warning; five spread over a segment is the planner
     packing too much in, which it could have split.
+
+    Which is why the segment is *chosen* rather than taken as the first one. A segment already
+    holding a beat with more new terms than the budget reports as a warning whatever is added to
+    it, so mutating that one tests nothing -- and ``segments[0]`` became such a segment the day
+    the planner started merging undersized ones.
     """
-    segment = script.sections[0].segments[0]
+    segment = next(
+        (
+            s
+            for s in script.segments()
+            if s.beats
+            and max((len(b.concept_ids) for b in s.beats if b.type in TEACHING_TYPES), default=0)
+            <= 2
+        ),
+        None,
+    )
+    assert segment is not None, "the fixture has no segment whose beats are under the budget"
     for i in range(2):
         segment.beats.append(
             Beat(

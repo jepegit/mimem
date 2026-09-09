@@ -181,6 +181,7 @@ def plan(
 
     # 13. re-check the segment sizes, and say how long the finished programme actually is.
     _split_oversized(ctx, script)
+    _merge_undersized(ctx, script)
     _retarget_transitions(ctx, script)
     _retime_orientation(ctx, script, prequestions, problem)
 
@@ -999,6 +1000,83 @@ def _split_oversized(ctx: _Context, script: Script) -> None:
         for segment in section.segments:
             out.extend(_split(ctx, segment, section.title, bounds.hard_max, bounds.target_max))
         section.segments = out
+
+
+def _merge_undersized(ctx: _Context, script: Script) -> None:
+    """Fold a segment below the duration floor into the one after it (rule SEG-01).
+
+    The mirror of :func:`_split_oversized`, and it rests on the same argument: the closing recap,
+    the emphasis marker and the spaced callbacks all land after segmentation, so a segment's
+    finished length is only known here. What it fixes is the other end of the range. A segment
+    that flushed on the new-term budget with one beat in it shipped at **seven seconds** -- which
+    the listener does not experience as a segment but as two transitions, seven seconds apart,
+    with a sentence between them.
+
+    The last segment of a section is left alone: it carries the recap and the section-boundary
+    pause, and rule SEG-01 exempts it for that reason.
+
+    The new-term budget is kept, not traded. Merging two segments merges what they teach, and the
+    first attempt at this pushed one segment past ``SEG-03``'s limit -- which that rule calls an
+    error, because a planner that packs a segment could have split it. Turning a warning about
+    pacing into an error about working memory is not a trade worth making.
+
+    The test is whether the merge makes anything *worse*, not whether the result is inside the
+    budget. The commonest short segment is a position statement and a transition with no teaching
+    beat at all -- seven seconds of scaffolding -- and folding that into a segment already over
+    the budget adds nothing to it. Refusing on the absolute count left those exactly where they
+    were.
+    """
+    bounds = ctx.profile.segments
+    limit = ctx.profile.max_new_terms_per_segment
+    seen: set[str] = set()
+    for section in script.sections:
+        out: list[Segment] = []
+        for segment in section.segments:
+            previous = out[-1] if out else None
+            alone = _new_terms(segment, seen)
+            taught = _new_terms(previous, seen) | alone
+            if (
+                previous is not None
+                and previous.est_seconds < bounds.target_min
+                and previous.est_seconds + segment.est_seconds <= bounds.hard_max
+                and len(taught) <= max(limit, len(alone))
+            ):
+                # The head's transition announced a boundary that no longer exists, so it goes.
+                # Not the last beat, though :func:`_segment` put it there: the segment prompt and
+                # its answer were appended after it, at step 8.
+                beats = previous.beats
+                boundary = next(
+                    (
+                        i
+                        for i in reversed(range(len(beats)))
+                        if beats[i].type is BeatType.TRANSITION
+                    ),
+                    None,
+                )
+                if boundary is not None:
+                    beats = [*beats[:boundary], *beats[boundary + 1 :]]
+                segment.beats = [*beats, *segment.beats]
+                out[-1] = segment
+                seen |= taught
+                continue
+            if previous is not None:
+                seen |= _new_terms(previous, seen)
+            out.append(segment)
+        if out:
+            seen |= _new_terms(out[-1], seen)
+        section.segments = out
+
+
+def _new_terms(segment: Segment | None, seen: set[str]) -> set[str]:
+    """What this segment would teach that the listener has not met yet (rule SEG-03)."""
+    if segment is None:
+        return set()
+    return {
+        concept_id
+        for beat in segment.beats
+        if beat.type in TEACHING_TYPES
+        for concept_id in beat.concept_ids
+    } - seen
 
 
 def _split(

@@ -17,7 +17,7 @@ from itertools import pairwise
 
 from mimem.concepts import build as build_registry
 from mimem.config import Listener, Profile
-from mimem.ir import BeatType, BlockKind, Document, Script
+from mimem.ir import TEACHING_TYPES, BeatType, BlockKind, Document, Script, Section, Segment
 from mimem.lint import lint_script, script_rules
 from mimem.lint.rules import Severity
 from mimem.plan import plan
@@ -375,3 +375,70 @@ def test_a_segment_prompt_is_dropped_rather_than_answered_with_a_borrowed_senten
     assert prompts, "the fixture should still place prompts"
     answers = [b for b in interphase_script.beats() if b.type is BeatType.ANSWER]
     assert len(answers) == len(prompts)
+
+
+def test_no_segment_is_too_short_to_be_one(
+    interphase_script: Script, study_profile: Profile
+) -> None:
+    """Rule SEG-01 has two ends, and the planner only enforced the top one.
+
+    A segment that flushed on the new-term budget with one beat in it shipped at seven seconds --
+    which a listener does not experience as a segment but as two transitions, seven seconds apart,
+    with a sentence between them. Five of the stress corpus's segments were under sixteen.
+
+    The last segment of a section is exempt: it carries the recap and the section-boundary pause,
+    and the rule exempts it for that reason.
+    """
+    floor = study_profile.segments.target_min
+    for section in interphase_script.sections:
+        for segment in section.segments[:-1]:
+            assert segment.est_seconds >= floor or _cannot_merge(segment, section, study_profile), (
+                f"{segment.id} runs {segment.est_seconds:.0f}s, under the {floor:.0f}s floor"
+            )
+
+
+def _cannot_merge(segment: Segment, section: Section, profile: Profile) -> bool:
+    """Merging is declined when it would break the duration ceiling or the new-term budget."""
+    index = section.segments.index(segment)
+    following = section.segments[index + 1]
+    combined = segment.est_seconds + following.est_seconds
+    terms = {
+        c
+        for s in (segment, following)
+        for b in s.beats
+        if b.type in TEACHING_TYPES
+        for c in b.concept_ids
+    }
+    return combined > profile.segments.hard_max or len(terms) > profile.max_new_terms_per_segment
+
+
+def test_merging_does_not_trade_a_pacing_warning_for_a_working_memory_error(
+    interphase_script: Script, study_profile: Profile
+) -> None:
+    """The first version of the merge pushed one corpus segment past SEG-03's budget.
+
+    That rule calls it an *error* -- a planner that packs a segment could have split it -- so the
+    merge would have turned a warning about pacing into a failed build.
+    """
+    from mimem.lint.script_rules import NewTermBudget
+
+    errors = [
+        v
+        for v in NewTermBudget(study_profile).check(interphase_script)
+        if v.severity is Severity.ERROR
+    ]
+    assert errors == []
+
+
+def test_a_merged_segment_does_not_keep_the_boundary_it_lost(interphase_script: Script) -> None:
+    """The head announced a boundary that no longer exists, so its transition goes with it.
+
+    One transition per segment, not "a transition last": the segment prompt and its answer are
+    appended at step 8, after :func:`_segment` has put the boundary on the end, so a transition
+    sitting third from last is the ordinary shape. Two of them in one segment is the merge having
+    kept a boundary it removed.
+    """
+    for section in interphase_script.sections:
+        for segment in section.segments:
+            transitions = [b for b in segment.beats if b.type is BeatType.TRANSITION]
+            assert len(transitions) <= 1, f"{segment.id} announces two boundaries"

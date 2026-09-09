@@ -18,10 +18,11 @@ from abc import ABC, abstractmethod
 from itertools import pairwise
 
 from mimem.config import Profile
-from mimem.ir import TEACHING_TYPES, BeatType, ExposureForm, Script
+from mimem.ir import TEACHING_TYPES, Beat, BeatType, ExposureForm, Script
 from mimem.lint.rules import Severity, Violation
 from mimem.plan.beats import OWNERSHIP_MARKERS
 from mimem.plan.exposure import exposure_log, spaced
+from mimem.verbalize.cohesion import unresolved_opening
 from mimem.verify import check as check_grounding
 
 #: A shared run of this many words is verbatim repetition, not paraphrase (rule REP-01).
@@ -596,48 +597,41 @@ class AnaphoraResolvesAcrossBeats(ScriptRule):
     description = "no beat opens with a pronoun whose antecedent is in another beat"
     severity = Severity.WARNING
 
-    #: Bare pronouns and demonstratives. A demonstrative followed by a noun ("this crust") is
-    #: resolved by the noun and is not matched -- see ``_BARE`` below.
-    _PRONOUNS = r"it|this|that|these|those|they|them|such"
+    @staticmethod
+    def _with_predecessor(script: Script) -> list[tuple[Beat, Beat | None]]:
+        """Every beat with the beat spoken immediately before it, ``None`` at a boundary.
 
-    #: "It is worth noting", "it turns out", "there is no" -- the subject is grammatical filler
-    #: and points at nothing, so there is nothing for the listener to have lost.
-    EXPLETIVE = re.compile(
-        r"^it\s+(?:is|was|turns\s+out|follows|remains|seems|appears|takes|helps|matters)\b",
-        re.IGNORECASE,
-    )
-
-    #: A demonstrative counts as unresolved only when nothing follows it that could be the
-    #: referent: "this is why" (bare) fails, "this repair" (determiner) passes.
-    BARE = re.compile(
-        r"^(?:" + _PRONOUNS + r")\s+(?:is|are|was|were|means|meant|gives|gave|shows|showed|gets|"
-        r"got|gets|makes|made|gains|has|have|had|gets|gives|does|do|did|can|could|will|would|"
-        r"gets|happens|explains|gets|becomes|became|comes|came|goes|went|stays|stayed|leaves|"
-        r"left|costs|cost|matters|mattered|then|also|too|in|on|at|by|for|with|and|but|so)\b",
-        re.IGNORECASE,
-    )
-
-    #: These two never resolve out loud whatever follows them, so they are matched on their own.
-    ALWAYS = re.compile(r"^the\s+(?:former|latter|above|aforementioned)\b", re.IGNORECASE)
+        A segment boundary counts as a boundary; so does the start of the opening or the review
+        block. What is *inside* a segment is continuous speech.
+        """
+        runs: list[list[Beat]] = [list(script.opening)]
+        runs += [list(seg.beats) for sec in script.sections for seg in sec.segments]
+        runs.append(list(script.review))
+        return [(beat, run[i - 1] if i else None) for run in runs for i, beat in enumerate(run)]
 
     def check(self, script: Script) -> list[Violation]:
         out: list[Violation] = []
-        for beat in script.beats():
-            opening = beat.text.strip()
-            if not opening or beat.generated:
+        for beat, previous in self._with_predecessor(script):
+            word = unresolved_opening(beat.text)
+            if word is None or beat.generated:
                 continue
-            if self.EXPLETIVE.match(opening):
+            # **Only when something stands between the pronoun and its antecedent.** Quoting two
+            # consecutive sentences of a paper in two consecutive beats is not a defect: the
+            # listener heard the referent three seconds ago, and "...will be discussed in
+            # further detail. It can be difficult to distinguish..." is how the paper reads.
+            #
+            # What breaks it is a boundary. A segment opens, or a transition or a prompt lands in
+            # front of the pronoun, and the referent is now two beats and a pause away. Four of
+            # the nine warnings on the corpus were the harmless case.
+            if previous is not None and not previous.generated:
                 continue
-            match = self.ALWAYS.match(opening) or self.BARE.match(opening)
-            if match:
-                out.append(
-                    self._violation(
-                        f"beat opens with {match.group(0).split()[0].lower()!r}; "
-                        "say the referent instead",
-                        beat.text,
-                        beat.id,
-                    )
+            out.append(
+                self._violation(
+                    f"beat opens with {word!r}; say the referent instead",
+                    beat.text,
+                    beat.id,
                 )
+            )
         return out
 
 

@@ -344,16 +344,19 @@ SCRIPT_TRIGGERS: dict[str, Callable[[], Script]] = {
     # A chunk that stops mid-sentence.
     "TTS-04": lambda: _script(segments=[[_beat("e1", text="The residual drift is dominated by")]]),
     # A beat opening on a pronoun with no referent in it.
+    # The pronoun has to open a *segment*. Quoting two consecutive sentences of a paper in two
+    # consecutive beats is not the defect -- the listener heard the referent three seconds ago.
+    # What breaks it is the boundary: a transition and a pause now stand in between.
     "SENT-02": lambda: _script(
         segments=[
+            [_beat("e1", text="The clamping stress differs between the two resonators.")],
             [
-                _beat("e1", text="The clamping stress differs between the two resonators."),
                 _beat(
                     "e2",
                     text="This is what sets the floor on paired compensation.",
                     generated=False,
-                ),
-            ]
+                )
+            ],
         ]
     ),
     # A table read out before the listener is told it is a table.

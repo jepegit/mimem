@@ -17,7 +17,7 @@ from itertools import pairwise
 
 from mimem.concepts import build as build_registry
 from mimem.config import Listener, Profile
-from mimem.ir import BeatType, Document, Script
+from mimem.ir import BeatType, BlockKind, Document, Script
 from mimem.lint import lint_script, script_rules
 from mimem.lint.rules import Severity
 from mimem.plan import plan
@@ -297,3 +297,52 @@ def test_the_listener_profile_reaches_the_plan(
     )
     if known is not None:
         assert known.difficulty < 0.4
+
+
+def test_a_prequestion_is_closed_once_and_not_twice(interphase_script: Script) -> None:
+    """Rule PRQ-02 closes a loop, and a loop can only be closed once.
+
+    A card can end its section and be asked again inside another segment, and closing it in
+    both places tells the listener the same thing about the same question twice.
+    """
+    closed = [b.card_id for b in interphase_script.beats() if b.type is BeatType.PREQUESTION_CLOSE]
+    assert len(closed) == len(set(closed))
+
+
+def test_prequestions_are_drawn_from_the_whole_card_pool(
+    interphase_doc: Document, study_profile: Profile
+) -> None:
+    """Rule PRQ-01 asks for two to four, and they used to be chosen too early to have them.
+
+    The draw happened at step 2, when the pool held only the section-closing cards -- one per
+    section. A paper whose headings do not survive extraction has *one* section, so one card,
+    so one prequestion; three of twelve corpus papers failed this rule, with final pools of 12,
+    3 and 33 cards. The fixture's headings are removed here to reproduce that.
+    """
+    headless = interphase_doc.model_copy(deep=True)
+    for block in headless.blocks:
+        if block.kind is BlockKind.HEADING:
+            block.kind = BlockKind.PARAGRAPH
+            block.level = None
+    registry = build_registry(headless, Listener())
+    script = plan(headless, registry, study_profile, Listener())
+
+    assert len({s.id for s in script.sections}) == 1, "the fixture is meant to have one section"
+    assert len(script.cards) > 1
+    asked = [b for b in script.opening if b.type is BeatType.PREQUESTION and b.card_id]
+    assert 2 <= len(asked) <= 4
+    assert {b.card_id for b in asked} <= {c.id for c in script.cards}
+
+
+def test_a_fallback_transition_ends_on_a_sentence_boundary(study_profile: Profile) -> None:
+    """Rule TTS-04. It is assigned straight onto a beat, so it never passes through ``make``.
+
+    One corpus paper has a section titled "Available online at www.sciencedirect.com". The URL
+    pattern is greedy over non-space and takes the full stop away with the address, leaving
+    "Still on available online at" for the engine to run into whatever came next.
+    """
+    from mimem.plan.beats import BeatFactory, section_fallback_transition
+
+    factory = BeatFactory(study_profile)
+    for title in ("Available online at www.sciencedirect.com", "Results and discussion", ""):
+        assert section_fallback_transition(factory, title).endswith(".")

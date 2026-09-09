@@ -122,14 +122,13 @@ def plan(
     groups = _section_groups(doc)
     script.cards = _card_pool(ctx, groups)
     by_section = {c.section_id: c for c in script.cards if c.section_id}
-    prequestions = _prequestions(ctx, script.cards)
 
     # 3. the sentence the orientation will use for "why anyone cared", chosen *before* the
     # body so that the exposition can leave it out. Chosen after, it was said twice.
     problem = _problem_sentence(ctx)
 
     # 4-7. exposition, segmentation, emphasis, recaps, one prompt per section.
-    script.sections = _body(ctx, groups, by_section, {c.id for c in prequestions})
+    script.sections = _body(ctx, groups, by_section)
 
     # 8. one retrieval prompt per segment where the budget allows (rules RET-03, ELB-02).
     # The section-closing cards are kept aside: they are what the review block interleaves.
@@ -142,7 +141,14 @@ def plan(
     _add_segment_prompts(ctx, script)
 
     # 9. the opening block, which needs the cards and the body's duration.
+    #
+    # The prequestions are drawn *here*, not back at step 2 where the pool was first built.
+    # Then, the pool held only the section-closing cards -- one per section -- so a paper whose
+    # headings did not survive extraction had a single card to draw from and asked a single
+    # question, against a rule that wants two to four.
+    prequestions = _prequestions(ctx, script.cards)
     script.opening = _opening(ctx, script, prequestions, problem)
+    _close_prequestions(ctx, script, {c.id for c in prequestions})
 
     # 10. spacing, measured on the timeline the opening and body produce. Everything the
     # exposition has already said is spent first, so a callback cannot hand back a sentence the
@@ -470,7 +476,6 @@ def _body(
     ctx: _Context,
     groups: list[tuple[Block | None, list[Block]]],
     by_section: dict[str, Card],
-    prequestion_ids: set[str],
 ) -> list[Section]:
     """Exposition, segmented, with position statements, recaps and one prompt per section."""
     sections: list[Section] = []
@@ -499,7 +504,7 @@ def _body(
         section.segments = _segment(ctx, opening + body, section_id, title)
         introduced = {c for seg in section.segments for c in seg.concept_ids} - before
         _add_emphasis(ctx, section)
-        _close_section(ctx, section, by_section.get(section_id), prequestion_ids, introduced)
+        _close_section(ctx, section, by_section.get(section_id), introduced)
         sections.append(section)
     return sections
 
@@ -663,7 +668,6 @@ def _close_section(
     ctx: _Context,
     section: Section,
     card: Card | None,
-    prequestion_ids: set[str],
     introduced: set[str],
 ) -> None:
     """Rule STR-06: a micro-recap and one retrieval prompt, at the end of every section."""
@@ -684,11 +688,38 @@ def _close_section(
 
     if card is not None:
         last.beats.extend(make.prompt_beats(ctx.factory, card))
-        if card.id in prequestion_ids:
-            last.beats.append(make.prequestion_close_beat(ctx.factory, card))
     last.beats[-1].pause_after = max(
         last.beats[-1].pause_after, ctx.profile.pauses.section_boundary
     )
+
+
+def _close_prequestions(ctx: _Context, script: Script, prequestion_ids: set[str]) -> None:
+    """Rule PRQ-02: say, where each prequestion's answer lands, that it is discharged.
+
+    A pass over the finished script rather than a line inside :func:`_close_section`, because
+    the prequestions are now drawn after the segment prompts exist -- so a question may be
+    answered by a segment's prompt as easily as by the one that closes its section, and neither
+    is known when the section is built.
+
+    The close goes after the *last* beat carrying the card, which is its answer.
+    """
+    if not prequestion_ids:
+        return
+    cards = {c.id: c for c in script.cards if c.id in prequestion_ids}
+    closed: set[str] = set()
+    for segment in (seg for section in script.sections for seg in section.segments):
+        # The last beat carrying the card, which is its answer -- and only the first segment
+        # that carries it. A card can close a section and be asked again inside another, and
+        # closing the loop twice tells the listener the same thing about the same question.
+        last_of: dict[str, int] = {}
+        for index, beat in enumerate(segment.beats):
+            if beat.card_id in cards and beat.card_id not in closed:
+                last_of[beat.card_id] = index
+        closed |= set(last_of)
+        for card_id, index in sorted(last_of.items(), key=lambda kv: -kv[1]):
+            segment.beats.insert(
+                index + 1, make.prequestion_close_beat(ctx.factory, cards[card_id])
+            )
 
 
 def _add_segment_prompts(ctx: _Context, script: Script) -> None:

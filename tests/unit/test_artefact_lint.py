@@ -197,3 +197,72 @@ def test_acknowledge_needs_its_object(sentence: str, fires: bool) -> None:
         re.search(pattern, sentence, re.IGNORECASE) for pattern, _ in DropListRespected.FURNITURE
     )
     assert matched is fires
+
+
+# -- what is not an unexpanded acronym -----------------------------------------------------------
+#
+# Of 158 SYM-02 warnings across the stress corpus, 126 were distinct tokens and the majority were
+# neither acronyms nor unexpanded. Two classes accounted for most of it.
+
+
+def _flagged(text: str) -> set[str]:
+    from mimem.lint.rules import AcronymsAreExpanded
+
+    return {v.message.split("'")[1] for v in AcronymsAreExpanded().check(text)}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A word capitalised by typography, not because it is an acronym. The first is a page
+        # stamp and the second a heading; between them they reported "UNIV", "OF", "TEXAS", "AT",
+        # "AUSTIN", "AND", "REVIEW" and "PAPERS" as jargon the listener has to guess.
+        "Downloaded by UNIV OF TEXAS AT AUSTIN on August 27 2015 and the rest followed. ",
+        "the minimum signal values. RESULTS AND DISCUSSION. We then measured the cells. ",
+        "This is JES COLLECTION OF INVITED BATTERY REVIEW PAPERS and the review begins here. ",
+    ],
+)
+def test_a_word_inside_a_phrase_set_in_capitals(text: str) -> None:
+    assert _flagged(text) == set()
+
+
+@pytest.mark.parametrize(
+    ("text", "formula"),
+    [
+        # A chemical formula whose subscript the number verbalizer has already said. Expanding
+        # one is not a thing anyone can do.
+        ("aqueous solutions of H two SO four and acid were used here. ", "SO"),
+        ("the transition metal oxides WO three were prepared by heating. ", "WO"),
+        ("semiconductor yttrium trihydride, YH three, was measured at once. ", "YH"),
+        ("peels treated with H three PO four for one hour in the bath. ", "PO"),
+        ("signals characteristic of CH two groups were seen in the spectrum. ", "CH"),
+    ],
+)
+def test_a_formula_whose_subscript_has_already_been_spoken(text: str, formula: str) -> None:
+    assert formula not in _flagged(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "acronym"),
+    [
+        # The number is what makes the formula test safe to act on. These are element runs too --
+        # carbon-vanadium, phosphorus-carbon -- and they are real acronyms that are never
+        # followed by a spoken subscript.
+        ("measured by CV at a scan rate of five millivolts per second here. ", "CV"),
+        ("the PC electrolyte was degassed before use in every cell we built. ", "PC"),
+        # ...and the ordinary case the rule exists for.
+        ("images were taken with SEM and the surface was clean throughout. ", "SEM"),
+        ("the SEI layer grew thicker on each cycle of the cell under test. ", "SEI"),
+    ],
+)
+def test_an_acronym_the_source_never_expands_is_still_reported(text: str, acronym: str) -> None:
+    assert acronym in _flagged(text)
+
+
+def test_an_acronym_is_reported_on_its_first_real_use_not_its_first_appearance() -> None:
+    """Skipping it because a heading came first hid ``ATR`` and ``SBR``.
+
+    Both are genuinely never expanded, and both appear in running prose further down.
+    """
+    text = "ATR FTIR SPECTROSCOPY OF ELECTRODES. The spectra were taken by ATR on a sample. "
+    assert "ATR" in _flagged(text)

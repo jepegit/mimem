@@ -185,6 +185,48 @@ class AcronymsAreExpanded(LintRule):
 
     CANDIDATE = re.compile(r"\b[A-Z]{2,6}\b(?=[.,;:]?\s)")
 
+    #: Capitals either side, with nothing but capitals and punctuation between. A word inside a
+    #: run like this is capitalised by typography, not because it is an acronym: "RESULTS AND
+    #: DISCUSSION" is a heading and "Downloaded by UNIV OF TEXAS AT AUSTIN" is a stamp, and
+    #: between them they accounted for nine warnings about the words "and", "of", "at", "univ",
+    #: "Texas", "Austin", "review" and "papers".
+    #:
+    #: Two neighbours, because a pair of capitals is an acronym beside a name often enough --
+    #: "XPS SEM" -- and a run of three is a phrase set in capitals.
+    IN_CAPS_RUN = 2
+
+    #: A spoken number after a run of element symbols. ``CH two``, ``SO four``, ``PO four``,
+    #: ``PF three``, ``WO three``, ``YH three``, ``HNO three`` are formulas whose subscript the
+    #: number verbalizer has already said, and expanding them is not a thing anyone can do.
+    #:
+    #: The number is what makes this safe to act on. ``CV`` and ``PC`` are also element runs --
+    #: carbon-vanadium, phosphorus-carbon -- and they are real acronyms, cyclic voltammetry and
+    #: propylene carbonate; neither is ever followed by a spoken subscript.
+    _SPOKEN_NUMBER = re.compile(
+        r"\s+(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b",
+        re.IGNORECASE,
+    )
+
+    def _inside_a_caps_run(self, text: str, start: int, end: int) -> bool:
+        """Is this token one word of a phrase set in capitals?"""
+        before = text[max(0, start - 60) : start]
+        after = text[end : end + 60]
+        left = re.findall(r"[^\W\d_]+", before)[-self.IN_CAPS_RUN :]
+        right = re.findall(r"[^\W\d_]+", after)[: self.IN_CAPS_RUN]
+        neighbours = left + right
+        # At least two letters each: a lone capital beside a token is a variable, not a word
+        # of a phrase. "R equals ID IG" would otherwise suppress ID because R is capital.
+        caps = [w for w in neighbours if w.isupper() and len(w) > 1]
+        return len(caps) >= self.IN_CAPS_RUN
+
+    def _is_a_formula(self, acronym: str, text: str, end: int) -> bool:
+        """Is this a chemical formula whose subscript has already been spoken?"""
+        from mimem.verbalize.formulas import element_groups
+
+        if not element_groups(acronym):
+            return False
+        return bool(self._SPOKEN_NUMBER.match(text, end))
+
     #: Units and chemistry that are read as letters and have no expansion to give: "CO two",
     #: "DC", "pH". Listing them is a judgement call; getting one wrong costs a warning.
     NOT_ACRONYMS = frozenset({"CO", "DC", "AC", "PH", "UV", "IR", "OK", "II", "III", "IV", "VI"})
@@ -196,14 +238,25 @@ class AcronymsAreExpanded(LintRule):
                 continue
             if self._expanded(text, acronym):
                 continue
-            first = re.search(r"\b" + re.escape(acronym) + r"\b", text)
-            if first is None:  # unreachable; the acronym came from this text
+            # The first occurrence that is a *use*, not the first occurrence. An acronym whose
+            # first appearance is inside an all-caps heading is still unexpanded everywhere
+            # else, and skipping it on that evidence hid real ones.
+            use = next(
+                (
+                    m
+                    for m in re.finditer(r"\b" + re.escape(acronym) + r"\b", text)
+                    if not self._inside_a_caps_run(text, m.start(), m.end())
+                    and not self._is_a_formula(acronym, text, m.end())
+                ),
+                None,
+            )
+            if use is None:
                 continue
             out.append(
                 self._violation(
                     text,
-                    first.start(),
-                    first.end(),
+                    use.start(),
+                    use.end(),
                     f"{acronym!r} is never expanded; the listener has to guess",
                 )
             )

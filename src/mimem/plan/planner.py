@@ -58,6 +58,7 @@ from mimem.plan.support import (
 )
 from mimem.render.narrate import uses_superscript_citations
 from mimem.triage.rules import retained
+from mimem.verbalize.cohesion import unresolved_opening
 
 #: Prequestions: two to four per document (rule PRQ-01), whatever the profile asks for.
 PREQUESTION_BOUNDS = (2, 4)
@@ -580,6 +581,16 @@ def _segment(ctx: _Context, beats: list[Beat], section_id: str, title: str) -> l
             or (seconds >= bounds.target_min and seconds + beat.total_seconds > bounds.target_max)
         )
         over_terms = bool(current) and len(new_terms | introduced) > limit
+        # A boundary in front of a sentence that opens on a bare pronoun is what turns a quoted
+        # sentence into a broken one (rule SENT-02): "Still on synthesis. This is apparent in
+        # the superior cycling..." puts a transition and a pause between the pronoun and the
+        # thing it points at. The break waits one beat, as long as the clock allows.
+        if (
+            (over_time or over_terms)
+            and unresolved_opening(beat.text) is not None
+            and seconds + beat.total_seconds <= bounds.hard_max
+        ):
+            over_time = over_terms = False
         if over_time or over_terms:
             flush()
             introduced = {c for c in taught if c not in ctx.seen_concepts}
@@ -987,6 +998,13 @@ def _cut_point(segment: Segment, target_max: float) -> int | None:
             break
         if beat.type is BeatType.PROMPT or following.type is BeatType.ANSWER:
             continue  # rule RET-01: a prompt and its answer are one unit
+        if unresolved_opening(following.text) is not None:
+            # Rule SENT-02: the new segment would open on a bare pronoun, with a transition and
+            # a pause now standing between it and the thing it points at. Every one of the
+            # corpus's remaining SENT-02 warnings was a cut made here -- "Still on synthesis.
+            # This is apparent in the superior cycling of the cell..." -- and an earlier boundary
+            # is always available, because the same loop has already passed one.
+            continue
         if running <= target_max:
             best = i + 1
     return best

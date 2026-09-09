@@ -215,7 +215,15 @@ NON_CONCEPTS = frozenset(
 #: real subjects -- it repeats, and repetition is all the window can see.
 CLAUSE_LIKE = re.compile(
     r"\b(?:is|are|was|were|be|been|being|has|have|had|do|does|did|will|would|can|could|"
-    r"should|may|might|must)\b",
+    r"should|may|might|must|"
+    # The ones that carry the meaning rather than the tense. Without them "scan shows the xrd"
+    # is a term: it survives the boundary check, because the verb is in the middle.
+    r"shows|show|showed|reveals|reveal|revealed|indicates|indicate|indicated|"
+    r"suggests|suggest|suggested|contains|contain|contained|exhibits|exhibit|exhibited|"
+    r"becomes|become|became|appears|appear|appeared|remains|remain|remained|"
+    # "lead" is not here, and neither is "leads": in a battery corpus it is the metal, and a
+    # rule that loses "lead acid battery" to catch "leads to capacity fade" is a bad trade.
+    r"gives|give|gave|makes|make|made)\b",
     re.IGNORECASE,
 )
 
@@ -268,6 +276,51 @@ PHRASE_BOUNDARY_VERBS = frozenset(
         "proposed",
         "developed",
         "conducted",
+        # -- the present tense, which the list did not have at all ---------------------------
+        #
+        # Every entry above is a past participle, so a phrase that opens or closes on a finite
+        # verb went straight through: "shows the XRD pattern", "figure shows", "scan shows the
+        # xrd" were three of one paper's twenty-seven concepts, and the programme asked "what did
+        # they report for figure shows?"
+        "shows",
+        "show",
+        "reveals",
+        "reveal",
+        "indicates",
+        "indicate",
+        "suggests",
+        "suggest",
+        "becomes",
+        "become",
+        "contains",
+        "contain",
+        "exhibits",
+        "exhibit",
+        "see",
+        # -- participles the corpus supplied, and their -ing forms ----------------------------
+        "cycled",
+        "cycling",
+        "prepared",
+        "preparing",
+        "discharged",
+        "discharging",
+        "charged",
+        "charging",
+        "stopped",
+        "extracted",
+        "containing",
+        "showing",
+        "associated",
+        "characteristic",
+        "consistent",
+        "attributed",
+        "assigned",
+        "related",
+        "corresponding",
+        # -- and a preposition the stop list missed --------------------------------------------
+        "against",
+        "above",
+        "below",
     ]
 )
 

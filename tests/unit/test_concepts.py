@@ -280,3 +280,63 @@ def test_norms_status_is_honest_about_its_source() -> None:
     assert reported.source in {"brysbaert", "morphology"}
     if reported.source == "morphology":
         assert reported.entries == 0
+
+
+# -- phrases that are clauses, which the verb lists could not see --------------------------------
+#
+# 38 of the stress corpus's 482 concepts were clause fragments, and the programme asked questions
+# about them: "What did they report for figure shows?" Both lists were written in the past tense.
+
+
+def _is_a_term(phrase: str) -> bool:
+    from mimem.concepts.extract import CLAUSE_LIKE, _is_phrase_like
+
+    return _is_phrase_like(phrase.split()) and not CLAUSE_LIKE.search(phrase)
+
+
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        # A finite verb at the boundary. PHRASE_BOUNDARY_VERBS had only past participles.
+        "figure shows",
+        "shows the XRD pattern",
+        "see Figure",
+        "see Table",
+        "becomes amorphous",
+        "containing species",
+        "consistent with the presence",
+        "peaks characteristic",
+        "capacity associated",
+        "electrodes extracted",
+        "against sodium metal counter",
+        "discharged to mv",
+        "above mv",
+        # A finite verb in the *middle*, which the boundary check cannot reach. This is what
+        # CLAUSE_LIKE is for, and it had only the auxiliaries.
+        "scan shows the xrd",
+        "study are open-sourced",
+    ],
+)
+def test_a_clause_is_not_a_concept(fragment: str) -> None:
+    assert not _is_a_term(fragment)
+
+
+@pytest.mark.parametrize(
+    "term",
+    [
+        # Ordinary terms, which must survive both lists.
+        "crystalline silicon",
+        "irreversible capacity",
+        "solid electrolyte interphase",
+        "differential capacity",
+        "state of charge",
+        "battery degradation",
+        "oxygen-containing yttrium hydride",
+        # "lead" is the metal here. A rule that loses this to catch "leads to capacity fade" is a
+        # bad trade, so the lead family is deliberately absent from CLAUSE_LIKE.
+        "lead acid battery",
+        "lithium lead alloy",
+    ],
+)
+def test_a_term_survives_the_verb_lists(term: str) -> None:
+    assert _is_a_term(term)

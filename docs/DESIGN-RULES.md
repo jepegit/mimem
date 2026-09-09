@@ -115,7 +115,8 @@ an explicit cue that thinking time is expected. A prompt without a pause is a li
 ## 3. Sentence-level style (`SENT-*`, `ORI-*`, `SIG-*`, `VOI-*`)
 
 **SENT-01** Median sentence length **≤ 20 words**; hard cap **35 words**; no sentence with more than
-two subordinate clauses. Long source sentences are split, not compressed. *(KB §2.1; lint)*
+two subordinate clauses. Long source sentences are split, not compressed. *(KB §2.1; lint; stage 6
+`split`, which is checked in both directions because a split is lossless and a summary is not)*
 
 **SENT-02** **No unresolved anaphora across a beat boundary.** "It", "this", "the former/latter",
 "the above" must be replaced by the referent whenever the antecedent is more than one sentence back

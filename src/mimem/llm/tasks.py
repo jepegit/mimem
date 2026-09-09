@@ -30,6 +30,7 @@ from mimem.llm.schemas import (
     CompressOut,
     FigureOut,
     GlossOut,
+    SplitOut,
     VerifyOut,
     WhyOut,
 )
@@ -224,6 +225,51 @@ Passage:
         schema=CompressOut,
         effort=EFFORT_LOW,
         max_tokens=1200,
+    )
+
+
+def split(sentence: str, document: str, cap: int) -> Request:
+    """Cut one long source sentence into short ones (rule SENT-01).
+
+    The design rule says **split, not compress**, and the instruction says so four ways, because
+    this is the one task where a fluent wrong answer is indistinguishable from a right one. A
+    summary of a sentence reads exactly like a split of it, and the listener has no way to know
+    which they were given. So the verification is bidirectional -- every number and name has to
+    survive in *both* directions -- and the instruction is written to make that verification
+    pass rather than to make the prose pretty.
+
+    The subject is repeated rather than pronominalised. "X, which does Y" splits naturally into
+    "X. It does Y", and that is a rule ``SENT-02`` violation manufactured by the fix for
+    ``SENT-01``: the listener meets "it" at the start of a sentence with the referent now behind
+    a full stop. Repeating the noun costs two words and is the whole reason a split is safe.
+
+    *Degrades to:* the source sentence, unchanged. Long, and the linter goes on saying so.
+    """
+    instruction = f"""\
+Split this sentence into two or more shorter sentences, each under {cap} words.
+
+This is a split, not a summary. Every fact, number, unit, name and qualifier in the original
+must appear in your sentences, and you must not add any that are not there. Do not shorten by
+leaving something out: if a clause cannot be carried over, return the sentence unchanged as a
+single-element list and it will be used as it is.
+
+Start each sentence with a noun, not with "it", "this", "they" or "these" — repeat the subject
+instead. These sentences are heard, not read, so a pronoun at the start of one points at
+something the listener can no longer see.
+
+Keep the paper's own wording wherever it fits. You are moving clauses apart, not rephrasing them.
+
+Sentence:
+{sentence}
+"""
+    return Request(
+        task="split",
+        system=SYSTEM,
+        document=document,
+        instruction=instruction,
+        schema=SplitOut,
+        effort=EFFORT_LOW,
+        max_tokens=900,
     )
 
 

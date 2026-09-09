@@ -8,7 +8,8 @@ icon: lucide/brain-circuit
 fluency, and the structure is deterministic: a document goes in and a listenable, checkable
 programme comes out with no model involved at all. What a model adds is the explaining — a
 one-line gloss, a concrete anchor, an analogy that says where it breaks down, a description of a
-figure you cannot see.
+figure you cannot see — and one thing that is not explaining at all: cutting the paper's longest
+sentences into ones you can hold in your head.
 
 Start here:
 
@@ -70,6 +71,23 @@ values; the planner owns structure.
 sentence must appear in the source sentences it was written from; a claim that reverses the
 paper's direction is rejected before it reaches the programme (`GRD-03`). You can watch that
 happen — the elaboration report lists what was accepted, what was rejected and why.
+
+**One task rewrites the paper's own words, and only one.** Rule `SENT-01` caps a sentence at
+thirty-five spoken words, because a sentence you would re-read on the page is simply lost in
+audio — and 465 sentences across a twelve-paper corpus are over it. The rule says what to do
+about them: *long source sentences are split, not compressed.*
+
+That distinction is the whole of it. A summary of a sentence reads exactly like a split of it,
+and the listener has no way to tell which they were given. So the check runs in **both**
+directions: every number in the source must appear in the split, and every number in the split
+must appear in the source. Nothing else a model writes here can fail the first of those, because
+nothing else is supposed to be lossless. It is what makes this safe to do to a paper's sentences
+at all.
+
+The paper is never edited. The split is stored beside the sentence it replaces, the span still
+points at what was written, and `study.md` can show you one against the other. When a split
+drops a value it is rejected and the long sentence is spoken as it stands — which happened twice
+in ten on the first live run, and a long true sentence beats a short lossy one every time.
 
 **When the model is absent, every task degrades along a documented path** and the manifest
 records *why* — there are four different reasons and they need four different actions from you:

@@ -83,6 +83,17 @@ class CompressOut(Out):
     text: str = Field(max_length=1200)
 
 
+class SplitOut(Out):
+    """One long source sentence, cut into short ones (rule SENT-01).
+
+    A list rather than a paragraph, because the *number* of sentences is the thing being asked
+    for and a single string would let the model return the original with a comma moved. Two at
+    least: a "split" that returns one sentence has not split anything.
+    """
+
+    sentences: list[str] = Field(min_length=2, max_length=6)
+
+
 class FigureOut(Out):
     """A figure description in the accessibility template order (rule FIG-01).
 

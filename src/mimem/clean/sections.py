@@ -275,6 +275,37 @@ def _strip_run_in_label(block: Block) -> None:
         block.sentences = sentence_spans(block.text)
 
 
+#: A collection or section banner set above a title. "JES COLLECTION OF INVITED BATTERY REVIEW
+#: PAPERS" is printed on its own line above "Review-Hard Carbon Negative Electrode Materials for
+#: Sodium-Ion Batteries", in the same block and at the same type size, so the title heuristic
+#: takes both -- and the programme opened by announcing the collection.
+#:
+#: Matched as a run of words rather than as a line, because the line break is gone by the time
+#: front matter is labelled.
+#:
+#: **Four words minimum.** A title may legitimately open with an acronym -- "XPS Analysis of
+#: Silicon Anodes" -- and one, two or three capitals in a row are that far more often than they
+#: are a banner. A banner is a phrase.
+MIN_BANNER_WORDS = 4
+_BANNER = re.compile(
+    r"^(?:[^a-z\s]*[A-Z][^a-z\s]*\s+){" + str(MIN_BANNER_WORDS) + r",}(?=[A-Z][a-z])"
+)
+
+#: Below this, what is left is not a title and the run was the title itself, in capitals.
+MIN_TITLE_TAIL = 20
+
+
+def _strip_banner(block: Block) -> str | None:
+    """The banner removed from the front of a title block, or ``None`` if there is none."""
+    match = _BANNER.match(block.text)
+    if match is None:
+        return None
+    rest = block.text[match.end() :].strip()
+    if len(rest) < MIN_TITLE_TAIL or not re.search(r"[a-z]", rest):
+        return None
+    return rest
+
+
 def _assign_front_matter(doc: Document, front: list[Block]) -> None:
     """Label title / authors / affiliation / abstract / keywords.
 
@@ -294,6 +325,10 @@ def _assign_front_matter(doc: Document, front: list[Block]) -> None:
     )
     title.role = BlockRole.TITLE
     title.attrs["front_matter_guess"] = True
+    banner = _strip_banner(title)
+    if banner is not None:
+        title.attrs["banner_removed"] = title.text[: len(title.text) - len(banner)].strip()
+        title.text = banner
     if title.kind is BlockKind.PARAGRAPH:
         title.kind = BlockKind.HEADING
         title.level = 1

@@ -43,6 +43,20 @@ _EDGE_LABEL = re.compile(r"^[A-Za-z0-9](?=\s)\s*|\s+[A-Za-z0-9]$")
 #: for containing it. Short enough to be a coincidence is short enough to be prose.
 MIN_CONTAINED = 24
 
+#: A block that repeats on this fraction of the pages is furniture *wherever* it sits.
+#:
+#: Position is the usual evidence and the right evidence for a running head, but it is not the
+#: only kind. ACS stamps "Downloaded by UNIV OF TEXAS AT AUSTIN on August 27, 2015 |
+#: http://pubs.acs.org" down the side of the page, rotated, vertically centred -- as far from
+#: the top and bottom as a block can get -- on all twelve pages of one corpus paper, and it was
+#: narrated as prose because the edge band never looked there.
+#:
+#: Set high, and with a floor of three pages, because this is repetition standing on its own
+#: without position to corroborate it. Two pages that happen to end on the same sentence are a
+#: coincidence; nine pages out of ten carrying the same eighty characters are a stamp.
+EVERYWHERE_FRACTION = 0.9
+MIN_EVERYWHERE_REPEATS = 3
+
 
 def _signature(text: str) -> str:
     """Normalise away the parts that change from page to page (the page number, mostly).
@@ -70,20 +84,25 @@ def strip_page_artifacts(doc: Document) -> Document:
 
     candidates: dict[str, set[int]] = defaultdict(set)
     edge_blocks: dict[str, list[str]] = defaultdict(list)
+    anywhere: dict[str, set[int]] = defaultdict(set)
+    anywhere_blocks: dict[str, list[str]] = defaultdict(list)
     for block in doc.blocks:
         if block.page is None or block.bbox is None or not block.text.strip():
             continue
         if block.kind in {BlockKind.FIGURE, BlockKind.TABLE}:
             continue
+        if len(block.text) > 200:
+            continue
+        sig = _signature(block.text)
+        anywhere[sig].add(block.page)
+        anywhere_blocks[sig].append(block.id)
+
         top, bottom = bounds.get(block.page, (0.0, 0.0))
         height = max(bottom - top, 1.0)
         rel_top = (block.bbox.y0 - top) / height
         rel_bottom = (bottom - block.bbox.y1) / height
         if min(rel_top, rel_bottom) > EDGE_BAND:
             continue
-        if len(block.text) > 200:
-            continue
-        sig = _signature(block.text)
         candidates[sig].add(block.page)
         edge_blocks[sig].append(block.id)
 
@@ -102,6 +121,15 @@ def strip_page_artifacts(doc: Document) -> Document:
     for sig in repeated:
         for block_id in edge_blocks[sig]:
             marked += mark(block_id, f"repeats on {len(candidates[sig])} pages")
+
+    # Repetition without position: a stamp down the side of the page, or anywhere else a block
+    # can sit and still be on every page of the document.
+    everywhere = max(MIN_EVERYWHERE_REPEATS, math.ceil(EVERYWHERE_FRACTION * len(pages)))
+    for sig, seen in anywhere.items():
+        if len(seen) < everywhere:
+            continue
+        for block_id in anywhere_blocks[sig]:
+            marked += mark(block_id, f"repeats on {len(seen)} of {len(pages)} pages")
 
     # The first page's footer is the running footer with something else stuck to it -- the
     # copyright line, or the received-and-revised dates. It is the same furniture and it is read

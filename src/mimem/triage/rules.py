@@ -101,7 +101,17 @@ BOILERPLATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "license",
         re.compile(r"^" + _MARK + r"(this is an open access article|licen[sc]ed under)", re.I),
     ),
-    ("submission dates", re.compile(r"^" + _MARK + r"received:.{0,80}accepted:", re.I | re.S)),
+    (
+        # The publication history, however the journal words it. Anchoring on "Received:" and
+        # "Accepted:" matched one house style: "Manuscript submitted July 2, 2015; revised
+        # manuscript received August 17, 2015. Published October 9, 2015." was narrated in full.
+        "submission dates",
+        re.compile(
+            r"^" + _MARK + r"(?:manuscript\s+)?(?:received|submitted)\b"
+            r".{0,160}\b(?:accepted|revised|published)\b",
+            re.I | re.S,
+        ),
+    ),
     (
         "graphical abstract furniture",
         re.compile(

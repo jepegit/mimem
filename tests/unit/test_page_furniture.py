@@ -114,3 +114,35 @@ def test_a_short_shared_phrase_is_not_enough_to_be_called_furniture() -> None:
     doc = _paper(["Table 1" for _ in range(PAGES - 1)] + ["Table 1 shows the capacities measured"])
     strip_page_artifacts(doc)
     assert _kinds(doc)[-1] is BlockKind.PARAGRAPH
+
+
+# -- furniture that is not at an edge of the page ------------------------------------------------
+
+
+def test_a_stamp_down_the_side_of_every_page_is_furniture() -> None:
+    """Position is the usual evidence for furniture. It is not the only kind.
+
+    ACS stamps "Downloaded by UNIV OF TEXAS AT AUSTIN on August 27, 2015 | http://pubs.acs.org"
+    down the side of the page, rotated, vertically centred -- as far from the top and bottom as a
+    block can get -- on all twelve pages of one corpus paper. The edge band never looked there,
+    so it was narrated as prose, and rule SYM-02 reported the words "UNIV", "OF", "TEXAS", "AT"
+    and "AUSTIN" as unexpanded acronyms.
+    """
+    stamp = "Downloaded by UNIV OF TEXAS AT AUSTIN on August 27, 2015 | http://pubs.acs.org"
+    doc = _paper([stamp] * PAGES)
+    # Put every stamp in the vertical middle of the page, where the edge band cannot see it.
+    for block in doc.blocks:
+        if block.id.startswith("foot"):
+            block.bbox = BBox(x0=3, y0=265, x1=20, y1=554)
+    strip_page_artifacts(doc)
+    assert _kinds(doc) == [BlockKind.PAGE_ARTIFACT] * PAGES
+
+
+def test_repetition_without_position_needs_nearly_every_page() -> None:
+    """It is repetition standing on its own, so the bar is higher than the edge band's."""
+    doc = _paper(["A repeated closing sentence."] * 3 + ["Something else entirely."] * 4)
+    for block in doc.blocks:
+        if block.id.startswith("foot"):
+            block.bbox = BBox(x0=50, y0=265, x1=550, y1=554)
+    strip_page_artifacts(doc)
+    assert _kinds(doc) == [BlockKind.PARAGRAPH] * PAGES

@@ -74,3 +74,39 @@ def test_a_block_that_is_nothing_but_back_matter_is_left_for_triage() -> None:
     assert find_boundary(whole) is None
     doc = split_back_matter(_paragraph(whole))
     assert len(doc.blocks) == 1
+
+
+def test_the_rights_notice_is_cut_off_the_abstract_rather_than_taking_it_along() -> None:
+    """Back matter printed at the front, and it cost one paper its abstract.
+
+    Triage's boilerplate hint is not anchored, so one licence sentence anywhere inside a block
+    condemns the block -- and this paper runs the licence straight on from the last sentence of
+    the abstract.
+    """
+    abstract = (
+        "A first review of hard carbon materials as negative electrodes for sodium ion "
+        "batteries is presented, covering the electrochemical performance and the synthetic "
+        "methods. "
+    )
+    rights = (
+        "© The Author(s) 2015. Published by ECS. This is an open access article distributed "
+        "under the terms of the Creative Commons Attribution 4.0 License."
+    )
+    doc = split_back_matter(_paragraph(abstract + rights))
+    assert len(doc.blocks) == 2
+    assert doc.blocks[0].text == abstract.strip()
+    assert doc.blocks[1].text == rights
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        # The words of a rights notice doing ordinary work in a sentence.
+        "The copyright position was unclear until the publisher responded.",
+        "All rights were retained by the authors under the agreement they signed.",
+    ],
+)
+def test_a_sentence_about_rights_is_not_a_rights_notice(tail: str) -> None:
+    text = CONCLUSION + tail
+    doc = split_back_matter(_paragraph(text))
+    assert len(doc.blocks) == 1

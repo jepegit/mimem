@@ -247,3 +247,43 @@ def test_two_hints_that_a_full_stop_had_made_unreachable() -> None:
     # ...without swallowing the ordinary words they are prefixes of.
     assert not _AFFILIATION_HINT.search("we incorporated the binder")
     assert not _AFFILIATION_HINT.search("the incident light was filtered")
+
+
+def test_a_journal_banner_is_not_part_of_the_title() -> None:
+    """ "JES COLLECTION OF INVITED BATTERY REVIEW PAPERS" is printed above the title.
+
+    Same block, same type size, so the title heuristic took both -- and the programme opened by
+    announcing the collection.
+    """
+    from mimem.clean.sections import _strip_banner
+
+    block = Block(
+        id="t",
+        kind=BlockKind.HEADING,
+        text=(
+            "JES COLLECTION OF INVITED BATTERY REVIEW PAPERS Review—Hard Carbon Negative "
+            "Electrode Materials for Sodium-Ion Batteries"
+        ),
+        order=0,
+    )
+    assert _strip_banner(block) == (
+        "Review—Hard Carbon Negative Electrode Materials for Sodium-Ion Batteries"
+    )
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        # A title may open with an acronym, and one, two or three capitals in a row are that far
+        # more often than they are a banner.
+        "XPS Analysis of Silicon Anodes during Cycling",
+        "SEM AND TEM Analysis of the Interphase Layer",
+        # A title set entirely in capitals is a title, not a banner with nothing after it.
+        "STRUCTURAL CHANGES IN SILICON ANODES DURING LITHIUM INSERTION",
+        "Aluminum hydride as a hydrogen and energy storage material",
+    ],
+)
+def test_a_title_that_merely_starts_in_capitals_is_left_alone(title: str) -> None:
+    from mimem.clean.sections import _strip_banner
+
+    assert _strip_banner(Block(id="t", kind=BlockKind.HEADING, text=title, order=0)) is None

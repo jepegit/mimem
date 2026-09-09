@@ -261,3 +261,23 @@ def test_prose_that_opens_with_a_dash_is_still_prose() -> None:
     )
     doc = triage(_doc(("paragraph", "body", text)))
     assert doc.blocks[0].triage.action is not TriageAction.DROP
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The house style the pattern was written for...
+        "Received: 3 May 2011 Revised: 1 June 2011 Accepted: 9 June 2011",
+        # ...and the one it missed, narrated in full by a corpus paper.
+        (
+            "Manuscript submitted July 2, 2015; revised manuscript received August 17, 2015. "
+            "Published October 9, 2015."
+        ),
+    ],
+)
+def test_the_publication_history_however_the_journal_words_it(text: str) -> None:
+    doc = triage(_doc(("paragraph", "body", text)))
+    decision = doc.blocks[0].triage
+    assert decision is not None
+    assert decision.action is TriageAction.DROP
+    assert decision.reason == "submission dates"

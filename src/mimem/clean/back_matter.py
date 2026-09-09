@@ -51,6 +51,23 @@ HEADINGS = (
 #: single most reliable signal in the corpus: every one of them opens a back-matter section.
 MARKERS = "■▪●◆•"
 
+#: The rights notice, which is back matter printed at the *front*. One corpus paper runs it
+#: onto the end of its abstract -- "...into tangible practical products. \u00a9 The Author(s)
+#: 2015. Published by ECS. This is an open access article distributed under the terms of the
+#: Creative Commons Attribution 4.0 License..." -- and because triage's boilerplate hint is not
+#: anchored, one licence sentence inside a block condemned the whole block. The abstract was
+#: dropped.
+#:
+#: Cut, then, like everything else here. The copyright sign is the reliable half; the rest is
+#: for publishers that spell it out.
+RIGHTS = re.compile(
+    r"(?<=[.!?])\s+(?="
+    r"\u00a9|\(c\)\s|Copyright\b|All rights reserved\b"
+    r"|This (?:is|article is) an open[- ]access\b"
+    r"|Published by .{0,40}\bunder (?:a |the )?Creative Commons\b"
+    r")"
+)
+
 #: A heading in a heading's position: after a marker, or after a sentence has ended.
 BOUNDARY = re.compile(
     r"(?:(?<=[.!?])\s+|\s*(?=[" + MARKERS + r"]))"
@@ -71,6 +88,7 @@ MIN_KEPT = 40
 
 def find_boundary(text: str) -> int | None:
     """Where the back matter starts in ``text``, or ``None`` if it does not."""
+    cuts = [m.start() for m in RIGHTS.finditer(text) if m.start() >= MIN_KEPT]
     for match in BOUNDARY.finditer(text):
         if not match.group("heading")[0].isupper():
             continue  # "described in the supporting information" is a sentence
@@ -78,8 +96,9 @@ def find_boundary(text: str) -> int | None:
             continue  # "References to earlier work" is a subject, not a heading
         if match.start() < MIN_KEPT:
             return None  # the whole block is back matter; let triage drop it whole
-        return match.start()
-    return None
+        cuts.append(match.start())
+        break
+    return min(cuts) if cuts else None
 
 
 def split_back_matter(doc: Document) -> Document:
